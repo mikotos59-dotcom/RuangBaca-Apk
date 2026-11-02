@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="id" data-theme="normal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ruang Baca</title>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<main id="home">
+  <section class="hero">
+    <div>
+      <h1>Rak Buku</h1>
+      <p class="sub" id="homeSub"></p>
+    </div>
+    <button class="eye" id="eye" title="Rak privat"><svg viewBox="0 0 24 24"><path id="eyeP" d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zm10 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM4 4l16 16"/></svg></button>
+  </section>
+  <input class="filter" id="filter" placeholder="Cari di rak…" hidden>
+  <div class="shelf" id="shelf"></div>
+  <div class="empty" id="empty" hidden>
+    <div class="spine"><i></i><i></i><i></i><i></i></div>
+    <h2>Raknya masih kosong</h2>
+    <p>Buka situs komik lewat kolom alamat di atas, lalu tekan tombol <b>☆</b> di halaman komik. Chapter yang kamu baca berikutnya akan tercatat sendiri.</p>
+  </div>
+  <section class="favs">
+    <div class="favhead"><h3>Situs favorit</h3><button class="tb" id="favAdd">+ Tambah</button></div>
+    <div class="favlist" id="favs"></div>
+  </section>
+  <p class="foot">Ruang Baca HP <span id="ver"></span> · @SuS_X_x</p>
+</main>
+
+<div class="sheet" id="sheet" hidden><div class="panel" id="panel"></div></div>
+<div class="menu" id="bookMenu" hidden></div>
+
+<script>
+  // lib/data.js versi PC dipakai apa adanya: require("fs"/"path"/"crypto") diarahkan ke RBUi (Java)
+  window.module = { exports: {} };
+  window.require = (n) => ({
+    fs: {
+      readFileSync: (f) => { const t = RBUi.readFile(String(f).split("/").pop()); if (t === null || t === undefined) throw new Error("tidak ada"); return t; },
+      writeFileSync: (f, t) => { RBUi.writeFile(String(f).split("/").pop(), String(t)); },
+      renameSync: (a, b) => { RBUi.rename(String(a).split("/").pop(), String(b).split("/").pop()); },
+      mkdirSync: () => {},
+    },
+    path: { dirname: (f) => String(f).split("/").slice(0, -1).join("/") || ".", join: (...p) => p.join("/") },
+    crypto: { randomBytes: (n) => { const a = window.crypto.getRandomValues(new Uint8Array(n)); return { toString: () => [...a].map((b) => b.toString(16).padStart(2, "0")).join("") }; } },
+  })[n];
+</script>
+<script src="data.js"></script>
+<script>window.RBDataLib = module.exports;</script>
+<script src="engine.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'id.sus.ruangbaca'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'id.sus.ruangbaca'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // tanpa signingConfig: Pabrik SuS yang menandatangani APK
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // skrip Ruang Baca dipasang di awal setiap halaman (sebelum skrip situs)
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
