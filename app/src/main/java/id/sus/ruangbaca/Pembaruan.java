@@ -29,6 +29,7 @@ final class Pembaruan {
     private final Activity a;
     private JSONObject last;
     private volatile long downloading = -1;
+    private static final String PREF = "pembaruan";
 
     Pembaruan(Activity a) { this.a = a; }
 
@@ -121,6 +122,13 @@ final class Pembaruan {
         }
         if (downloading >= 0) throw new Exception("Pembaruan sedang diunduh.");
         DownloadManager dm = (DownloadManager) a.getSystemService(Context.DOWNLOAD_SERVICE);
+        // sudah pernah diunduh sampai selesai (mis. pemasangan tadi dibatalkan): langsung pasang, tidak unduh ulang
+        Uri done = finished(dm, asset.optString("name"), asset.optLong("size"));
+        if (done != null) {
+            cb.on(new JSONObject(u.toString()).put("progress", new JSONObject().put("done", 1).put("total", 1).put("ready", true)));
+            openInstaller(done);
+            return "pasang";
+        }
         String name = asset.optString("name").replaceAll("[^\\w.\\-]", "_");
         File old = new File(a.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), name);
         if (old.exists()) old.delete();
@@ -131,6 +139,7 @@ final class Pembaruan {
         r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
         long id = dm.enqueue(r);
         downloading = id;
+        a.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putLong("id", id).putString("name", asset.optString("name")).apply();
         new Thread(() -> watch(dm, id, u, cb)).start();
         return "unduh";
     }
@@ -152,13 +161,7 @@ final class Pembaruan {
                     p.put("progress", new JSONObject().put("done", done).put("total", done).put("ready", true));
                     cb.on(p);
                     Uri apk = dm.getUriForDownloadedFile(id);
-                    a.runOnUiThread(() -> {
-                        try {
-                            Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(apk, "application/vnd.android.package-archive")
-                                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-                            a.startActivity(i);
-                        } catch (Exception e) { openPage(); }
-                    });
+                    openInstaller(apk);
                     return;
                 }
                 p.put("progress", new JSONObject().put("done", done).put("total", Math.max(total, 0)));
@@ -167,6 +170,30 @@ final class Pembaruan {
         } catch (Exception e) {
             try { cb.on(new JSONObject(u.toString()).put("error", e.getMessage())); } catch (Exception ignored) { }
         } finally { downloading = -1; }
+    }
+
+    /** Unduhan yang sudah selesai untuk file ini (atau null). */
+    private Uri finished(DownloadManager dm, String name, long size) {
+        android.content.SharedPreferences sp = a.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+        long id = sp.getLong("id", -1);
+        if (id < 0 || !name.equals(sp.getString("name", ""))) return null;
+        try (Cursor c = dm.query(new DownloadManager.Query().setFilterById(id))) {
+            if (c == null || !c.moveToFirst()) return null;
+            if (c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)) != DownloadManager.STATUS_SUCCESSFUL) return null;
+            long got = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+            if (size > 0 && got != size) return null;
+            return dm.getUriForDownloadedFile(id);
+        } catch (Exception e) { return null; }
+    }
+
+    private void openInstaller(Uri apk) {
+        a.runOnUiThread(() -> {
+            try {
+                Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(apk, "application/vnd.android.package-archive")
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                a.startActivity(i);
+            } catch (Exception e) { openPage(); }
+        });
     }
 
     void openPage() {

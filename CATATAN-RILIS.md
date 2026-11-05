@@ -6,6 +6,11 @@
 
 
 
+
+## 0.2.6
+- **Pasang ulang tanpa unduh ulang:** kalau layar pemasangan Android tadi dibatalkan (mis. saat Google Play Protect menawarkan pindai), sekarang ada tombol **Pasang sekarang**. APK yang sudah diunduh langsung dipakai lagi, juga setelah aplikasi ditutup dan dibuka kembali.
+- Catatan rilis dari GitHub ditampilkan rapi (judul dan poin), bukan tanda `###` dan `-` mentah.
+
 ## 0.2.5
 - **Tema baru: Neon gelap dan Neon putih** (menggantikan Batik). Pengguna tema Batik otomatis pindah ke Neon gelap. Bilah atas dan bilah navigasi HP ikut berwarna sesuai tema.
 - **Pengaturan lebih rapi:** pilihan Tema dan Mesin pencari kini di bawah judulnya dan selebar layar, tidak lagi berdesakan dengan teks penjelasan.

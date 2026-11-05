@@ -262,10 +262,19 @@
     if (u.error) return inSettings ? `<p class="stat">Gagal memeriksa: ${esc(u.error)}</p><div class="btns"><button class="tb" data-act="updCheck">Coba lagi</button></div>` : "";
     if (!u.newer) return inSettings ? `<p class="stat">Sudah versi terbaru (${esc(u.current)}). Rilis tertinggi di GitHub: <b>${esc(u.latest)}</b>${u.tag ? ` (tag ${esc(u.tag)})` : ""}${u.pre ? ", pra-rilis" : ""}.</p><div class="btns"><button class="tb" data-act="updCheck">Cek lagi</button><button class="tb" data-act="updPage">Lihat di GitHub</button></div>` : "";
     const p = u.progress;
-    const bar = p ? (p.ready ? `<p class="stat">Unduhan selesai. Ikuti layar pemasangan Android.</p>` : `<div class="ubar"><i style="width:${p.total ? Math.round((p.done / p.total) * 100) : 5}%"></i></div><p class="stat">Mengunduh ${mb(p.done)}${p.total ? " / " + mb(p.total) : ""}…</p>`) : "";
-    const notes = inSettings && u.notes ? `<div class="unotes">${esc(u.notes).replace(/\n/g, "<br>")}</div>` : "";
+    const bar = p ? (p.ready ? `<p class="stat">Unduhan selesai. Ikuti layar pemasangan Android. Kalau Google Play Protect menawarkan pindai, pilih <b>Pindai aplikasi</b> atau <b>Instal tanpa memindai</b>. Kalau terlanjur dibatalkan, tekan <b>Pasang sekarang</b> (tidak perlu unduh ulang).</p><div class="btns"><button class="tb pri" data-act="updInstall">Pasang sekarang</button></div>` : `<div class="ubar"><i style="width:${p.total ? Math.round((p.done / p.total) * 100) : 5}%"></i></div><p class="stat">Mengunduh ${mb(p.done)}${p.total ? " / " + mb(p.total) : ""}…</p>`) : "";
+    const notes = inSettings && u.notes ? `<div class="unotes">${mdLite(u.notes)}</div>` : "";
     return `<p class="stat"><b>Versi baru ${esc(u.latest)} tersedia</b> (terpasang ${esc(u.current)}).</p>${notes}${bar}
       ${p ? "" : `<div class="btns"><button class="tb pri" data-act="updInstall">${u.asset ? `Perbarui${u.asset.size ? " · " + mb(u.asset.size) : ""}` : "Buka halaman rilis"}</button>${inSettings ? `<button class="tb" data-act="updPage">Lihat di GitHub</button>` : `<button class="tb" data-act="updLater">Nanti</button>`}</div>`}`;
+  }
+  // catatan rilis GitHub (Markdown sederhana): judul, poin, tebal, kode
+  function mdLite(t) {
+    return esc(t).split(/\r?\n/).map((l) => {
+      let x = l.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
+      if (/^#{1,6}\s/.test(l)) return `<b class="uh">${x.replace(/^#{1,6}\s+/, "")}</b>`;
+      if (/^\s*[-*]\s/.test(l)) return `<span class="ul">• ${x.replace(/^\s*[-*]\s+/, "")}</span>`;
+      return x.trim() ? `<span>${x}</span>` : "";
+    }).filter(Boolean).join("<br>");
   }
   function renderUpd() {
     const st = $("#updSt"); if (st) st.innerHTML = updHtml(true);
