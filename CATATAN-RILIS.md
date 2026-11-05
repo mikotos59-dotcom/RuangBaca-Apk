@@ -3,6 +3,12 @@
 
 
 
+
+## 0.2.3
+- **DNS diperbaiki:** sebelumnya Ruang Baca hanya memakai DoH (HTTPS ke 1.1.1.1). Kalau jalur itu diganggu penyedia internet, Ruang Baca diam-diam kembali ke DNS bawaan, jadi situs yang diblokir tetap tidak terbuka.
+  - Sekarang yang dicoba duluan **DNS-over-TLS (port 853)**, jalur yang sama dengan "DNS pribadi" Android. Kalau gagal, baru DoH, lalu server cadangan (1.0.0.1, 8.8.4.4, dst.). Jalur yang berhasil diingat dan dipakai duluan.
+  - **Tes DNS** di Pengaturan menampilkan jalur yang sedang dipakai, atau memberi tahu kalau server DNS tidak bisa dihubungi.
+
 ## 0.2.2
 - **Tombol Perbarui**: Ruang Baca mengecek rilis terbaru di GitHub (mikotos59-dotcom/RuangBaca-Apk). Kalau ada versi baru, muncul kotak di atas Rak Buku dengan tombol **Perbarui**: APK diunduh, lalu layar pemasangan Android terbuka. Data rak tidak hilang.
   - Cek otomatis saat aplikasi dibuka (paling sering 12 jam sekali), bisa dimatikan. Cek manual di Pengaturan → Pembaruan, lengkap dengan catatan rilisnya.

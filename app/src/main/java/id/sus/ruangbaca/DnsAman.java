@@ -16,6 +16,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import java.util.Collections;
 import java.util.concurrent.Executors;
 
 /**
@@ -29,6 +34,15 @@ final class DnsAman {
 
     private final ConcurrentHashMap<String, Entry> cache = new ConcurrentHashMap<>();
     private final ExecutorService pool = Executors.newCachedThreadPool();
+    /** Satu jalur DNS: DoH (url) atau DNS-over-TLS (ip + nama sertifikat, port 853, sama seperti "DNS pribadi" Android). */
+    static final class Jalur {
+        final String doh, ip, sni;
+        Jalur(String doh, String ip, String sni) { this.doh = doh; this.ip = ip; this.sni = sni; }
+        String label() { return doh != null ? "DoH " + doh.replaceFirst("^https://", "").replaceFirst("/.*$", "") : "DoT " + ip; }
+    }
+    private volatile List<Jalur> jalur = Collections.emptyList();
+    private volatile int good = 0;               // jalur yang terakhir berhasil (dicoba duluan)
+    private volatile String status = "";          // untuk ditampilkan di Pengaturan
     private volatile String doh = "";
     private ServerSocket server;
     private final String userAgent;
@@ -47,7 +61,39 @@ final class DnsAman {
         }
     }
 
-    void setServer(String url) { if (!url.equals(doh)) { doh = url; cache.clear(); } }
+    void setServer(String url) { setServer(url, null); }
+    /** key = pilihan di Pengaturan (cloudflare/google/…); url = alamat DoH utama. */
+    void setServer(String url, String key) {
+        String id = url + "|" + key;
+        if (id.equals(doh)) return;
+        doh = id; cache.clear(); good = 0; status = "";
+        List<Jalur> l = new ArrayList<>();
+        switch (key == null ? "" : key) {
+            case "cloudflare":
+                l.add(new Jalur(null, "1.1.1.1", "one.one.one.one")); l.add(new Jalur("https://1.1.1.1/dns-query", null, null));
+                l.add(new Jalur(null, "1.0.0.1", "one.one.one.one")); l.add(new Jalur("https://1.0.0.1/dns-query", null, null)); break;
+            case "google":
+                l.add(new Jalur(null, "8.8.8.8", "dns.google")); l.add(new Jalur("https://8.8.8.8/dns-query", null, null));
+                l.add(new Jalur(null, "8.8.4.4", "dns.google")); l.add(new Jalur("https://8.8.4.4/dns-query", null, null)); break;
+            case "quad9":
+                l.add(new Jalur(null, "9.9.9.9", "dns.quad9.net")); l.add(new Jalur("https://9.9.9.9/dns-query", null, null));
+                l.add(new Jalur(null, "149.112.112.112", "dns.quad9.net")); break;
+            case "adguard":
+                l.add(new Jalur(null, "94.140.14.14", "dns.adguard-dns.com")); l.add(new Jalur("https://dns.adguard-dns.com/dns-query", null, null));
+                l.add(new Jalur(null, "94.140.15.15", "dns.adguard-dns.com")); break;
+            default:
+                if (!url.isEmpty()) l.add(new Jalur(url, null, null));
+        }
+        jalur = l;
+    }
+    String status() { return status; }
+    /** Tes cepat untuk Pengaturan. */
+    String test() {
+        long t0 = System.currentTimeMillis();
+        cache.remove("cloudflare.com");
+        try { InetAddress[] a = resolve("cloudflare.com"); return status + " · " + (System.currentTimeMillis() - t0) + " ms" + (a.length > 0 ? "" : ""); }
+        catch (Exception e) { return "Gagal: " + e.getMessage(); }
+    }
 
     /** Jalankan proksi (sekali), kembalikan nomor port-nya. */
     synchronized int start() throws Exception {
@@ -72,17 +118,30 @@ final class DnsAman {
         if (host.matches("^[0-9.]+$") || host.contains(":") || host.equals("localhost")) return InetAddress.getAllByName(host);
         Entry e = cache.get(host);
         if (e != null && e.until > System.currentTimeMillis()) return e.a;
-        String url = doh;
-        if (url.isEmpty()) return InetAddress.getAllByName(host);
+        List<Jalur> l = jalur;
+        if (l.isEmpty()) return InetAddress.getAllByName(host);
         List<InetAddress> out = new ArrayList<>();
         long ttl = 300;
+        boolean answered = false, anyOk = false;
         Exception last = null;
         for (int type : new int[]{1, 28}) { // A lalu AAAA
-            try { ttl = Math.min(ttl, query(url, host, type, out)); } catch (Exception ex) { last = ex; }
+            // coba jalur yang terakhir berhasil dulu, lalu sisanya
+            for (int k = 0; k < l.size() && !answered; k++) {
+                int i = (good + k) % l.size();
+                Jalur j = l.get(i);
+                try { ttl = Math.min(ttl, j.doh != null ? query(j.doh, host, type, out) : queryTls(j, host, type, out)); answered = true; good = i; status = "Aktif lewat " + j.label(); }
+                catch (Exception ex) { last = ex; }
+            }
+            if (!answered) break;
+            anyOk = true;
             if (type == 1 && !out.isEmpty()) break; // IPv4 cukup
+            answered = false;
         }
         if (out.isEmpty()) {
-            if (last != null) return InetAddress.getAllByName(host); // DoH gagal: jangan sampai situs tidak terbuka sama sekali
+            if (!anyOk && last != null) {
+                status = "Server DNS tidak bisa dihubungi (" + last.getMessage() + "), sementara memakai DNS bawaan";
+                return InetAddress.getAllByName(host); // semua jalur gagal: jangan sampai internet mati total
+            }
             throw new java.net.UnknownHostException(host);
         }
         InetAddress[] a = out.toArray(new InetAddress[0]);
@@ -90,7 +149,7 @@ final class DnsAman {
         return a;
     }
 
-    private long query(String url, String host, int type, List<InetAddress> out) throws Exception {
+    private static byte[] question(String host, int type) throws Exception {
         ByteArrayOutputStream q = new ByteArrayOutputStream();
         q.write(new byte[]{0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0});
         for (String label : host.split("\\.")) {
@@ -99,7 +158,41 @@ final class DnsAman {
             q.write(b.length); q.write(b);
         }
         q.write(0); q.write(type >> 8); q.write(type & 255); q.write(0); q.write(1);
-        byte[] body = q.toByteArray();
+        return q.toByteArray();
+    }
+
+    /** DNS-over-TLS (port 853), jalur yang sama dengan "DNS pribadi" Android. */
+    private long queryTls(Jalur j, String host, int type, List<InetAddress> out) throws Exception {
+        byte[] body = question(host, type);
+        Socket s = new Socket(); // sambungan TCP biasa, TLS dipasang di atasnya (dengan nama sertifikat/SNI)
+        try {
+            s.connect(new InetSocketAddress(InetAddress.getByName(j.ip), 853), 5000);
+            s.setSoTimeout(6000);
+            SSLSocket t = (SSLSocket) ((SSLSocketFactory) SSLSocketFactory.getDefault()).createSocket(s, j.sni, 853, true);
+            SSLParameters p = t.getSSLParameters();
+            p.setServerNames(Collections.singletonList(new SNIHostName(j.sni)));
+            p.setEndpointIdentificationAlgorithm("HTTPS"); // sertifikat harus atas nama server DNS itu
+            t.setSSLParameters(p);
+            t.startHandshake();
+            OutputStream o = t.getOutputStream();
+            byte[] msg = new byte[body.length + 2];
+            msg[0] = (byte) (body.length >> 8); msg[1] = (byte) body.length;
+            System.arraycopy(body, 0, msg, 2, body.length);
+            o.write(msg); o.flush();
+            InputStream in = t.getInputStream();
+            int a = in.read(), b = in.read();
+            if (a < 0 || b < 0) throw new Exception("jawaban DoT kosong");
+            int len = (a << 8) | b;
+            byte[] r = new byte[len];
+            int got = 0;
+            while (got < len) { int n = in.read(r, got, len - got); if (n < 0) throw new Exception("jawaban DoT terpotong"); got += n; }
+            t.close();
+            return parse(r, type, out);
+        } finally { try { s.close(); } catch (Exception ignored) { } }
+    }
+
+    private long query(String url, String host, int type, List<InetAddress> out) throws Exception {
+        byte[] body = question(host, type);
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         try {
             c.setConnectTimeout(6000); c.setReadTimeout(6000);
@@ -117,6 +210,8 @@ final class DnsAman {
 
     private static long parse(byte[] r, int want, List<InetAddress> out) throws Exception {
         if (r.length < 12) throw new Exception("jawaban pendek");
+        int rcode = r[3] & 15;
+        if (rcode != 0 && rcode != 3) throw new Exception("DNS menjawab kode " + rcode);
         int qd = u16(r, 4), an = u16(r, 6), p = 12;
         long ttl = 3600;
         for (int i = 0; i < qd; i++) { p = skipName(r, p); p += 4; }

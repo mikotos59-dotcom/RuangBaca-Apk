@@ -183,6 +183,8 @@
       <p class="stat">Situs yang tidak bisa dibuka karena diblokir lewat DNS penyedia internet biasanya bisa terbuka dengan DNS lain. Hanya berlaku di Ruang Baca, setelan HP tidak diubah. Lewat jalur terenkripsi (DNS-over-HTTPS).</p>
       <label>Server DNS<select class="field" data-sel="dns">${[["bawaan", "Bawaan (penyedia internet)"], ["cloudflare", "Cloudflare · 1.1.1.1 (disarankan)"], ["google", "Google · 8.8.8.8"], ["quad9", "Quad9 · 9.9.9.9 (blok situs berbahaya)"], ["adguard", "AdGuard (ikut blok iklan)"], ["kustom", "Alamat sendiri…"]].map(([v, l]) => `<option value="${v}" ${(s.dns || "bawaan") === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
       <div id="dnsK" ${s.dns === "kustom" ? "" : "hidden"}><label>Alamat DoH<input class="field" id="dnsC" placeholder="https://dns.contoh.id/dns-query" value="${esc(s.dnsCustom || "")}" spellcheck="false" autocapitalize="off"></label><div class="btns"><button class="tb" data-act="dnsSave">Pakai</button></div></div>
+      <p class="stat" id="dnsSt"></p>
+      <div class="btns"><button class="tb" data-act="dnsTest">Tes DNS</button></div>
       <h4>Pencarian</h4>
       ${row("Mesin pencari", "Startpage: hasil Google tanpa melacak kamu", seg("search", s.search, [["startpage", "Startpage"], ["google", "Google"], ["duckduckgo", "DuckDuckGo"], ["bing", "Bing"]]))}
       <h4>Rak privat</h4>
@@ -212,6 +214,7 @@
       if (act === "updCheck") { updState = { checking: true }; renderUpd(); RBUi.updateCheck(); return; }
       if (act === "updInstall") { RBUi.updateInstall(); return; }
       if (act === "updPage") { RBUi.updatePage(); return; }
+      if (act === "dnsTest") { $("#dnsSt").textContent = "Mengetes…"; RBUi.dnsTest(); return; }
       if (act === "dnsSave") {
         const u = $("#dnsC").value.trim();
         if (u && !/^https:\/\/[^\s/]+\.[^\s]+$/.test(u)) return RBUi.toast("Alamat DNS harus alamat DoH, misalnya https://dns.contoh.id/dns-query");
@@ -288,6 +291,7 @@
       return false;
     },
     refresh: render,
+    dnsSt(t) { const el = $("#dnsSt"); if (el) el.textContent = t; },
     upd(j) { try { const o = JSON.parse(j); const dis = updState && updState.dismissed && !o.progress; updState = o; if (dis) o.dismissed = true; renderUpd(); } catch {} },
   };
 

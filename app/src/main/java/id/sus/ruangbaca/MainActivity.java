@@ -785,7 +785,7 @@ public class MainActivity extends Activity {
             return;
         }
         if (dns == null) dns = new DnsAman(userAgent);
-        dns.setServer(url);
+        dns.setServer(url, dnsKey);
         bg.execute(() -> {
             try {
                 int port = dns.start();
@@ -1021,6 +1021,16 @@ public class MainActivity extends Activity {
                 boolean s = new JSONObject(json).optBoolean("saved");
                 main.post(() -> { saved = s; updateStar(); });
             } catch (Exception ignored) { }
+        }
+        @JavascriptInterface
+        public void dnsTest() {
+            bg.execute(() -> {
+                String r;
+                if ("bawaan".equals(dnsKey) || dns == null) r = "DNS bawaan (penyedia internet) sedang dipakai.";
+                else if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) r = "WebView HP terlalu lama untuk DNS khusus. Perbarui Android System WebView.";
+                else r = dns.test();
+                evalUi("window.RBHome&&RBHome.dnsSt(" + q(r) + ")");
+            });
         }
         // ---------- pembaruan dari GitHub ----------
         @JavascriptInterface
