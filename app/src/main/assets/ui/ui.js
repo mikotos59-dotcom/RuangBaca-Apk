@@ -152,6 +152,7 @@
   const sw = (k, on) => `<button class="sw${on ? " on" : ""}" data-sw="${k}" aria-pressed="${!!on}"></button>`;
   const seg = (k, val, opts) => `<div class="seg" data-seg="${k}">${opts.map(([v, l]) => `<button data-v="${esc(v)}" class="${String(val) === String(v) ? "sel" : ""}">${esc(l)}</button>`).join("")}</div>`;
   const row = (title, note, ctl) => `<div class="row"><div class="lab">${esc(title)}${note ? `<small>${esc(note)}</small>` : ""}</div>${ctl}</div>`;
+  const rowS = (title, note, ctl) => `<div class="row stack"><div class="lab">${esc(title)}${note ? `<small>${esc(note)}</small>` : ""}</div>${ctl}</div>`;
   const range = (k, v, min, max, unit) => `<input type="range" data-r="${k}" min="${min}" max="${max}" value="${v}"><span class="val" id="v-${k}">${v}${unit || ""}</span>`;
 
   function adText() {
@@ -164,7 +165,7 @@
     const s = S();
     openSheet("Pengaturan", `
       <h4>Tampilan</h4>
-      ${row("Tema aplikasi", "", seg("theme", s.theme, [["normal", "Kertas"], ["dark", "Gelap"], ["batik", "Batik"]]))}
+      ${rowS("Tema aplikasi", "", seg("theme", s.theme, [["normal", "Kertas"], ["dark", "Gelap"], ["neon", "Neon gelap"], ["neonlight", "Neon putih"]]))}
       ${row("Mode gelap situs", "Bawaan untuk situs baru", sw("dark", s.dark))}
       ${row("Hitam putih", "Bawaan untuk situs baru", sw("gray", s.gray))}
       ${row("Warna kertas", "", seg("paper", s.paper, [["putih", "Putih"], ["krem", "Krem"], ["abu", "Abu"]]))}
@@ -180,13 +181,13 @@
       ${row("Label pop-up yang disingkirkan", "", seg("label", s.label, [["5", "5 detik"], ["tetap", "Tetap"], ["sembunyi", "Sembunyi"]]))}
       ${s.allowAds && s.allowAds.length ? `<p class="stat">Iklan diizinkan di: ${s.allowAds.map(esc).join(", ")}</p><div class="btns"><button class="tb" data-act="clearAllow">Blok lagi di semua situs</button></div>` : ""}
       <h4>DNS (opsional)</h4>
-      <p class="stat">Situs yang tidak bisa dibuka karena diblokir lewat DNS penyedia internet biasanya bisa terbuka dengan DNS lain. Hanya berlaku di Ruang Baca, setelan HP tidak diubah. Lewat jalur terenkripsi (DNS-over-HTTPS).</p>
+      <p class="stat">Situs yang tidak bisa dibuka karena diblokir lewat DNS penyedia internet biasanya bisa terbuka dengan DNS lain. Hanya berlaku di Ruang Baca, setelan HP tidak diubah. Lewat jalur terenkripsi (DNS-over-TLS / DNS-over-HTTPS).</p>
       <label>Server DNS<select class="field" data-sel="dns">${[["bawaan", "Bawaan (penyedia internet)"], ["cloudflare", "Cloudflare · 1.1.1.1 (disarankan)"], ["google", "Google · 8.8.8.8"], ["quad9", "Quad9 · 9.9.9.9 (blok situs berbahaya)"], ["adguard", "AdGuard (ikut blok iklan)"], ["kustom", "Alamat sendiri…"]].map(([v, l]) => `<option value="${v}" ${(s.dns || "bawaan") === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
       <div id="dnsK" ${s.dns === "kustom" ? "" : "hidden"}><label>Alamat DoH<input class="field" id="dnsC" placeholder="https://dns.contoh.id/dns-query" value="${esc(s.dnsCustom || "")}" spellcheck="false" autocapitalize="off"></label><div class="btns"><button class="tb" data-act="dnsSave">Pakai</button></div></div>
       <p class="stat" id="dnsSt"></p>
       <div class="btns"><button class="tb" data-act="dnsTest">Tes DNS</button></div>
       <h4>Pencarian</h4>
-      ${row("Mesin pencari", "Startpage: hasil Google tanpa melacak kamu", seg("search", s.search, [["startpage", "Startpage"], ["google", "Google"], ["duckduckgo", "DuckDuckGo"], ["bing", "Bing"]]))}
+      ${rowS("Mesin pencari", "Startpage: hasil Google tanpa melacak kamu", seg("search", s.search, [["startpage", "Startpage"], ["google", "Google"], ["duckduckgo", "DuckDuckGo"], ["bing", "Bing"]]))}
       <h4>Rak privat</h4>
       <p class="stat">${RB.privHosts().length ? "Situs privat: " + RB.privHosts().map(esc).join(", ") : "Belum ada situs privat. Pakai menu ⋮ pada buku untuk memasukkan situsnya."}</p>
       <label>PIN baru<input class="field" id="np" type="password" autocomplete="off" placeholder="minimal 4 karakter"></label>

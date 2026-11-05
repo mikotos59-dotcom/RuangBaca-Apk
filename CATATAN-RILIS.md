@@ -5,6 +5,11 @@
 
 
 
+
+## 0.2.5
+- **Tema baru: Neon gelap dan Neon putih** (menggantikan Batik). Pengguna tema Batik otomatis pindah ke Neon gelap. Bilah atas dan bilah navigasi HP ikut berwarna sesuai tema.
+- **Pengaturan lebih rapi:** pilihan Tema dan Mesin pencari kini di bawah judulnya dan selebar layar, tidak lagi berdesakan dengan teks penjelasan.
+
 ## 0.2.4
 - **Cek pembaruan diperbaiki:** dulu hanya rilis yang ditandai "Latest" di GitHub yang dilihat, dan versinya hanya dibaca dari tag. Rilis yang ditandai pra-rilis, atau yang tag-nya bukan nomor versi, jadi tidak terdeteksi.
   - Sekarang semua rilis diperiksa (kecuali draf). Versi aplikasi dibaca dari **nama file .apk** (mis. RuangBaca-0.2.4.apk), jadi tag rilis boleh punya penomoran sendiri (mis. v0.1.5). Kalau nama APK tidak bernomor, baru dipakai tag atau judul rilis.

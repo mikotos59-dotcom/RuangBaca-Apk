@@ -4,7 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const DEFAULTS = {
-  theme: "normal",          // normal | dark | batik
+  theme: "normal",          // normal | dark | neon | neonlight
   adblock: true,
   autoUpdate: true,         // cek versi baru di GitHub saat aplikasi dibuka (paling sering 12 jam sekali)
   search: "startpage",      // startpage | google | duckduckgo | bing
@@ -35,6 +35,8 @@ class Data {
       this.d = { ...this.d, ...raw, settings: { ...DEFAULTS, ...(raw.settings || {}) } };
     } catch {}
     // 0.2.1: mesin pencari bawaan pindah ke Startpage (sekali saja; pilihan sesudahnya tetap dihormati)
+    // 0.2.5: tema Batik diganti Neon gelap
+    if (this.d.settings.theme === "batik") this.d.settings.theme = "neon";
     if (!this.d.settings.searchV2) { if (this.d.settings.search === "google") this.d.settings.search = "startpage"; this.d.settings.searchV2 = true; }
     // judul lama dari alamat galeri berangka (/g/690628/) dulu tersimpan dengan nama pendek "g": dibetulkan
     for (const b of this.d.shelf || []) {
