@@ -13,6 +13,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.view.PixelCopy;
 import android.util.Base64;
 import androidx.webkit.ProxyConfig;
 import androidx.webkit.ProxyController;
@@ -133,7 +134,7 @@ public class MainActivity extends Activity {
     private volatile Set<String> antiAdblock = Collections.emptySet();
     private volatile Map<String, Set<String>> popupHosts = Collections.emptyMap();
     private volatile String topHost = "";
-    private String theme = "normal", search = "google";
+    private String theme = "normal", search = "startpage";
     private boolean saved = false, home = true;
     private long allowNextUntil = 0;
     private String noticeUrl = null;
@@ -567,7 +568,7 @@ public class MainActivity extends Activity {
         if (t.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) url = t;
         else if (!t.contains(" ") && t.matches("^[^/]+\\.[a-zA-Z]{2,}(?::\\d+)?(/.*)?$")) url = "https://" + t;
         else {
-            String base = "duckduckgo".equals(search) ? "https://duckduckgo.com/?q=" : "bing".equals(search) ? "https://www.bing.com/search?q=" : "https://www.google.com/search?q=";
+            String base = "duckduckgo".equals(search) ? "https://duckduckgo.com/?q=" : "bing".equals(search) ? "https://www.bing.com/search?q=" : "google".equals(search) ? "https://www.google.com/search?q=" : "https://www.startpage.com/sp/search?query=";
             try { url = base + URLEncoder.encode(t, "UTF-8"); } catch (Exception e) { return; }
         }
         hideKeyboard();
@@ -728,6 +729,45 @@ public class MainActivity extends Activity {
             return (HttpURLConnection) new URL(u).openConnection(new java.net.Proxy(java.net.Proxy.Type.HTTP, new java.net.InetSocketAddress("127.0.0.1", dns.port())));
         return (HttpURLConnection) new URL(u).openConnection();
     }
+
+    // ================= sampul dari layar =================
+    private static final Pattern META_IMG = Pattern.compile("<meta\\b[^>]*(?:og:image|twitter:image)[^>]*>", Pattern.CASE_INSENSITIVE);
+    private static final Pattern META_CONTENT = Pattern.compile("content\\s*=\\s*[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE);
+    /** Simpan sampul dari data:image (kanvas) atau potong langsung dari tampilan halaman. */
+    private void captureCover(int id, String json, String bookId) {
+        try {
+            JSONObject o = new JSONObject(json);
+            String d = o.optString("data", "");
+            if (d.startsWith("data:image/")) {
+                byte[] b = Base64.decode(d.substring(d.indexOf(',') + 1), Base64.DEFAULT);
+                Bitmap bm = BitmapFactory.decodeByteArray(b, 0, b.length);
+                if (bm != null) { coverSaved(id, saveCoverBitmap(bm, bookId)); return; }
+            }
+            JSONObject px = o.optJSONObject("px");
+            if (px == null) { coverSaved(id, ""); return; }
+            int[] loc = new int[2];
+            page.getLocationInWindow(loc);
+            int x = Math.max(0, px.optInt("x")), y = Math.max(0, px.optInt("y"));
+            int r = Math.min(page.getWidth(), px.optInt("x") + px.optInt("w")), btm = Math.min(page.getHeight(), px.optInt("y") + px.optInt("h"));
+            if (r - x < 24 || btm - y < 24) { coverSaved(id, ""); return; }
+            Rect src = new Rect(loc[0] + x, loc[1] + y, loc[0] + r, loc[1] + btm);
+            Bitmap out = Bitmap.createBitmap(src.width(), src.height(), Bitmap.Config.ARGB_8888);
+            PixelCopy.request(getWindow(), src, out, res -> {
+                if (res != PixelCopy.SUCCESS) { coverSaved(id, ""); return; }
+                bg.execute(() -> coverSaved(id, saveCoverBitmap(out, bookId)));
+            }, main);
+        } catch (Exception e) { coverSaved(id, ""); }
+    }
+    private String saveCoverBitmap(Bitmap bm, String bookId) {
+        try {
+            // sampul cukup 600 px lebarnya
+            if (bm.getWidth() > 600) bm = Bitmap.createScaledBitmap(bm, 600, Math.max(1, bm.getHeight() * 600 / bm.getWidth()), true);
+            String n = safe(bookId) + "-" + System.currentTimeMillis() + ".jpg";
+            try (FileOutputStream o = new FileOutputStream(new File(coverDir, n))) { bm.compress(Bitmap.CompressFormat.JPEG, 88, o); }
+            return n;
+        } catch (Exception e) { return ""; }
+    }
+    private void coverSaved(int id, String name) { evalUi("RBEngine.coverDone(" + id + "," + q(name == null ? "" : name) + ")"); }
 
     // ================= DNS aman =================
     private void applyDns(boolean reload) {
@@ -963,7 +1003,7 @@ public class MainActivity extends Activity {
                 JSONObject p = o.optJSONObject("popupHosts");
                 if (p != null) for (java.util.Iterator<String> it = p.keys(); it.hasNext(); ) { String k = it.next(); ph.put(wwwless(k), toSet(p.optJSONArray(k))); }
                 popupHosts = ph;
-                String th = o.optString("theme", "normal"), se = o.optString("search", "google");
+                String th = o.optString("theme", "normal"), se = o.optString("search", "startpage");
                 String dk = o.optString("dns", "bawaan"), dc = o.optString("dnsCustom", "");
                 main.post(() -> {
                     search = se;
@@ -978,6 +1018,26 @@ public class MainActivity extends Activity {
                 boolean s = new JSONObject(json).optBoolean("saved");
                 main.post(() -> { saved = s; updateStar(); });
             } catch (Exception ignored) { }
+        }
+        @JavascriptInterface
+        public void downloadPageCover(int id, String pageUrl, String bookId) {
+            bg.execute(() -> {
+                String img = null;
+                try {
+                    String h = new String(get(pageUrl, "text/html,*/*", 1 << 20), StandardCharsets.UTF_8);
+                    java.util.regex.Matcher m = META_IMG.matcher(h);
+                    while (m.find() && img == null) {
+                        java.util.regex.Matcher c = META_CONTENT.matcher(m.group());
+                        if (c.find()) img = new URL(new URL(pageUrl), c.group(1).replace("&amp;", "&").trim()).toString();
+                    }
+                } catch (Exception ignored) { }
+                if (img != null && img.startsWith("http")) fetchCover(id, img, pageUrl, bookId);
+                else evalUi("RBEngine.coverDone(" + id + ",\"\")");
+            });
+        }
+        @JavascriptInterface
+        public void captureCover(int id, String json, String bookId) {
+            main.post(() -> MainActivity.this.captureCover(id, json, bookId));
         }
         @JavascriptInterface
         public void fetchIcon(String host, String url) {

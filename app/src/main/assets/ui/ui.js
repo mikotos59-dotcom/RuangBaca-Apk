@@ -184,13 +184,13 @@
       <label>Server DNS<select class="field" data-sel="dns">${[["bawaan", "Bawaan (penyedia internet)"], ["cloudflare", "Cloudflare · 1.1.1.1 (disarankan)"], ["google", "Google · 8.8.8.8"], ["quad9", "Quad9 · 9.9.9.9 (blok situs berbahaya)"], ["adguard", "AdGuard (ikut blok iklan)"], ["kustom", "Alamat sendiri…"]].map(([v, l]) => `<option value="${v}" ${(s.dns || "bawaan") === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
       <div id="dnsK" ${s.dns === "kustom" ? "" : "hidden"}><label>Alamat DoH<input class="field" id="dnsC" placeholder="https://dns.contoh.id/dns-query" value="${esc(s.dnsCustom || "")}" spellcheck="false" autocapitalize="off"></label><div class="btns"><button class="tb" data-act="dnsSave">Pakai</button></div></div>
       <h4>Pencarian</h4>
-      ${row("Mesin pencari", "", seg("search", s.search, [["google", "Google"], ["duckduckgo", "DuckDuckGo"], ["bing", "Bing"]]))}
+      ${row("Mesin pencari", "Startpage: hasil Google tanpa melacak kamu", seg("search", s.search, [["startpage", "Startpage"], ["google", "Google"], ["duckduckgo", "DuckDuckGo"], ["bing", "Bing"]]))}
       <h4>Rak privat</h4>
       <p class="stat">${RB.privHosts().length ? "Situs privat: " + RB.privHosts().map(esc).join(", ") : "Belum ada situs privat. Pakai menu ⋮ pada buku untuk memasukkan situsnya."}</p>
       <label>PIN baru<input class="field" id="np" type="password" autocomplete="off" placeholder="minimal 4 karakter"></label>
       <div class="btns"><button class="tb" data-act="pin">Ganti PIN</button></div>
       <h4>Pindah data PC ↔ HP</h4>
-      <p class="stat">Ekspor membuat file .json berisi rak, favorit, dan pengaturan situs. File dari Ruang Baca PC (Pengaturan → Ekspor) bisa diimpor di sini, dan sebaliknya. Sampul dan PIN tidak ikut.</p>
+      <p class="stat">Ekspor membuat file .json berisi rak, favorit, dan pengaturan situs. File dari Ruang Baca PC (Pengaturan → Ekspor) bisa diimpor di sini, dan sebaliknya. Sampul tidak ikut di file, tapi diambil ulang otomatis dari situsnya setelah impor. PIN tidak ikut.</p>
       <div class="btns"><button class="tb pri" data-act="export">Ekspor…</button><button class="tb" data-act="import">Impor…</button></div>
       <h4>Lainnya</h4>
       <div class="btns"><button class="tb dan" data-act="clear">Hapus riwayat & cookie situs</button></div>
@@ -241,6 +241,9 @@
       }
     };
   }
+
+  // buku tanpa sampul (mis. hasil impor dari PC): coba ambil sampulnya di belakang layar
+  setTimeout(() => { try { RBEngine.refetchCovers(); } catch {} }, 4000);
 
   // dipanggil Java
   window.RBHome = {

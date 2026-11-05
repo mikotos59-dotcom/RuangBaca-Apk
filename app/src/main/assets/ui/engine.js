@@ -79,6 +79,40 @@ function downloadCover(b, url, referer, source) {
     RBUi.downloadCover(id, url, referer || "", b.id);
   });
 }
+// cadangan: Java memotong gambar langsung dari layar (rect dalam piksel layar) atau menyimpan data:image dari kanvas
+function captureCover(b, o, source) {
+  const id = ++coverSeq;
+  return new Promise((res) => {
+    coverWait.set(id, (name) => {
+      if (!name) return res(false);
+      const old = b.cover;
+      data.updateBook(b.id, { cover: name, coverSource: source });
+      if (old && old !== name) RBUi.deleteCover(old);
+      notify();
+      res(true);
+    });
+    RBUi.captureCover(id, JSON.stringify({ px: o.px || null, data: typeof o.src === "string" && /^data:image\//.test(o.src) ? o.src : "" }), b.id);
+  });
+}
+// setelah impor: sampul diambil lagi dari halaman judulnya (og:image), satu per satu
+let refetching = false;
+async function refetchCovers() {
+  if (refetching) return;
+  refetching = true;
+  try {
+    const now = Date.now();
+    for (const b of data.shelf().filter((x) => !x.cover && !(x.coverTry > now - 3 * 864e5))) {
+      const page = b.seriesUrl || b.lastUrl;
+      if (!page) continue;
+      data.updateBook(b.id, { coverTry: now });
+      const id = ++coverSeq;
+      await new Promise((res) => {
+        coverWait.set(id, (name) => { if (name && !data.findBook(page)?.cover) { data.updateBook(b.id, { cover: name, coverSource: "seri" }); notify(); } res(); });
+        RBUi.downloadPageCover(id, page, b.id);
+      });
+    }
+  } finally { refetching = false; }
+}
 // sampul otomatis hanya mengganti sampul tebakan, tidak pernah yang dipilih sendiri
 const replaceable = (b) => !b.cover || !["manual", "file"].includes(b.coverSource);
 
@@ -87,7 +121,7 @@ function nativeState() {
   const s = data.settings;
   const popupHosts = {};
   for (const [h, x] of Object.entries(data.d.sites)) if (x.popupHosts && x.popupHosts.length) popupHosts[h] = x.popupHosts;
-  RBUi.setNative(JSON.stringify({ adblock: !!s.adblock, allowAds: s.allowAds || [], popupHosts, theme: s.theme || "normal", search: s.search || "google", dns: s.dns || "bawaan", dnsCustom: s.dnsCustom || "", antiAdblock: Object.keys(data.d.sites).filter((h) => data.d.sites[h].antiAdblock) }));
+  RBUi.setNative(JSON.stringify({ adblock: !!s.adblock, allowAds: s.allowAds || [], popupHosts, theme: s.theme || "normal", search: s.search || "startpage", dns: s.dns || "bawaan", dnsCustom: s.dnsCustom || "", antiAdblock: Object.keys(data.d.sites).filter((h) => data.d.sites[h].antiAdblock) }));
 }
 function toolbarState() {
   const url = E.page.url;
@@ -135,7 +169,11 @@ const PAGE = {
     let b = data.findBook(url);
     if (!b) { const i = (o && o.info) || {}; b = data.addBook({ url, title: stripSite(i.title, url, i.siteName) }); }
     const src = o && typeof o.src === "string" ? o.src : null;
-    if (!src || !(await downloadCover(b, src, url, o && o.source === "area" ? "area" : "manual"))) throw new Error("Gambar itu tidak bisa diambil. Coba gambar lain.");
+    const source = o && o.source === "area" ? "area" : "manual";
+    let ok = src && /^https?:/.test(src) ? await downloadCover(b, src, url, source) : false;
+    // gambar tidak bisa diunduh (dilindungi situs, kanvas, dsb.): ambil langsung dari layar
+    if (!ok && o && (o.px || (src && src.startsWith("data:image/")))) ok = await captureCover(b, o, source);
+    if (!ok) throw new Error("Gambar itu tidak bisa diambil. Coba gambar lain.");
     notify();
     return bookView(data.findBook(url));
   },
@@ -192,6 +230,7 @@ window.RBEngine = {
     for (const f of data.favorites()) if (w(f.host) === w(host) && f.iconData !== icon) { f.iconData = icon; n++; }
     if (n) { data.save(); if (window.RBHome) RBHome.refresh(); }
   },
+  refetchCovers() { refetchCovers(); },
   coverDone(id, name) { const f = coverWait.get(id); coverWait.delete(id); if (f) f(name || ""); },
   saveCurrent() {
     const url = E.page.url;
@@ -205,7 +244,9 @@ window.RBEngine = {
     try {
       const r = data.importJson(JSON.parse(text));
       notify();
-      RBUi.toast(`Impor selesai: ${r.added} judul baru`);
+      const need = data.shelf().filter((x) => !x.cover).length;
+      RBUi.toast(`Impor selesai: ${r.added} judul baru${need ? ". Sampul sedang diambil dari situsnya…" : ""}`);
+      refetchCovers();
     } catch (e) { RBUi.toast(String(e.message || e)); }
   },
   flush() { data.flush(); },

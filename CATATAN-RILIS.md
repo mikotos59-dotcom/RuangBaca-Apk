@@ -1,6 +1,14 @@
 # Ruang Baca HP — Catatan Rilis
 
 
+
+## 0.2.1
+- **Mesin pencari bawaan: Startpage** (hasil pencarian Google tanpa melacak dan tanpa menyimpan riwayatmu). Pilihan Google / DuckDuckGo / Bing tetap ada di Pengaturan. Pengguna lama yang masih memakai Google otomatis dipindah sekali ke Startpage.
+- **Sampul setelah impor dari PC:** file ekspor memang tidak membawa gambar sampul. Sekarang setelah impor, sampul langsung diambil lagi dari halaman judul masing-masing (satu per satu di belakang layar). Buku yang belum bersampul juga dicoba lagi saat aplikasi dibuka (paling sering 3 hari sekali per buku).
+- **Pilih sampul di HP diperbaiki:**
+  - Ketukan langsung dipakai untuk memilih, jadi situs tidak sempat membuka tautan di bawah jari.
+  - Kalau gambarnya tidak bisa diunduh (dilindungi situs, gambar kanvas, dsb.), sampul diambil langsung dari tampilan layar di posisi gambar itu.
+
 ## 0.2.0
 - **Perbaikan:** ikon situs favorit sekarang muncul. Ikon diambil otomatis dari situsnya (ikon aplikasi/apple-touch-icon, ikon halaman, lalu favicon.ico), dan ikut diperbarui saat situsnya dibuka. Kalau situs tidak punya ikon, tetap tampil huruf berwarna.
 - **DNS (opsional)** di Pengaturan: Bawaan, Cloudflare 1.1.1.1, Google 8.8.8.8, Quad9, AdGuard (ikut blok iklan), atau alamat DoH sendiri.

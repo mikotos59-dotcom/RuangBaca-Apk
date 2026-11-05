@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const DEFAULTS = {
   theme: "normal",          // normal | dark | batik
   adblock: true,
-  search: "google",         // google | duckduckgo | bing
+  search: "startpage",      // startpage | google | duckduckgo | bing
   // tampilan hitam putih (bawaan, bisa diganti per situs)
   gray: false, paper: "putih", contrast: 115,
   popup: true,              // singkirkan pop-up Pro/koin
@@ -33,6 +33,8 @@ class Data {
       const raw = JSON.parse(fs.readFileSync(file, "utf8"));
       this.d = { ...this.d, ...raw, settings: { ...DEFAULTS, ...(raw.settings || {}) } };
     } catch {}
+    // 0.2.1: mesin pencari bawaan pindah ke Startpage (sekali saja; pilihan sesudahnya tetap dihormati)
+    if (!this.d.settings.searchV2) { if (this.d.settings.search === "google") this.d.settings.search = "startpage"; this.d.settings.searchV2 = true; }
     // judul lama dari alamat galeri berangka (/g/690628/) dulu tersimpan dengan nama pendek "g": dibetulkan
     for (const b of this.d.shelf || []) {
       if (b.slug && b.slug.length >= 3) continue;

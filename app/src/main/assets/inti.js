@@ -614,18 +614,47 @@
     st.picker.depth = Math.max(0, st.picker.depth + (e.deltaY < 0 ? 1 : -1));
     st.picker.el = pickTarget(...lastXY); drawPick(st.picker.el);
   }, { capture: true, passive: false });
+  // HP: ketukan langsung dipakai (situs sering membuka tautan saat jari diangkat, sebelum "click")
+  let touch0 = null, eatClick = 0;
+  addEventListener("touchstart", (e) => {
+    if (!st.picker || e.touches.length !== 1 || e.composedPath().includes(host) && !(st.picker.mode === "cover" && st.reader && e.composedPath().includes(st.reader.el))) { touch0 = null; return; }
+    const t = e.touches[0]; touch0 = { x: t.clientX, y: t.clientY, t: Date.now() };
+    e.stopPropagation();
+  }, { capture: true, passive: true });
+  addEventListener("touchend", (e) => {
+    if (!st.picker || !touch0) return;
+    const t = e.changedTouches[0], moved = Math.hypot(t.clientX - touch0.x, t.clientY - touch0.y);
+    touch0 = null;
+    if (moved > 12) return; // menggeser layar, bukan memilih
+    e.preventDefault(); e.stopPropagation();
+    eatClick = Date.now() + 700;
+    st.picker.el = pickTarget(t.clientX, t.clientY);
+    drawPick(st.picker.el);
+    doPick(t.clientX, t.clientY);
+  }, { capture: true, passive: false });
   addEventListener("click", async (e) => {
+    if (eatClick > Date.now()) { e.preventDefault(); e.stopPropagation(); return; }
     if (!st.picker) return;
     if (e.composedPath().includes(host) && !(st.picker.mode === "cover" && st.reader && e.composedPath().includes(st.reader.el))) return;
     e.preventDefault(); e.stopPropagation();
-    const el = st.picker.el || pickTarget(e.clientX, e.clientY);
+    doPick(e.clientX, e.clientY);
+  }, true);
+  // posisi gambar di layar dalam piksel asli (untuk memotong langsung dari layar kalau gambarnya tidak bisa diunduh)
+  function screenPx(r) {
+    const vv = window.visualViewport, k = (window.devicePixelRatio || 1) * (vv ? vv.scale : 1);
+    const ox = vv ? vv.offsetLeft : 0, oy = vv ? vv.offsetTop : 0;
+    return { x: Math.round((r.left - ox) * k), y: Math.round((r.top - oy) * k), w: Math.round(r.width * k), h: Math.round(r.height * k) };
+  }
+  async function doPick(x, y) {
+    if (!st.picker) return;
+    const el = st.picker.el || pickTarget(x, y);
     const mode = st.picker.mode;
     stopPicker();
     if (!el) { if (mode === "cover") toast("Tidak ada gambar di situ. Coba lagi dari menu."); return; }
     if (mode === "cover") {
       const r = el.getBoundingClientRect();
       try {
-        const b = await H.setCover({ src: imageSrc(el), rect: { x: r.left, y: r.top, width: r.width, height: r.height }, info: pageInfo() });
+        const b = await H.setCover({ src: imageSrc(el), rect: { x: r.left, y: r.top, width: r.width, height: r.height }, px: HP ? screenPx(r) : null, info: pageInfo() });
         st.book = b;
         // dipilih di halaman judul (bukan chapter, bukan mode baca): jadikan patokan sampul untuk situs ini
         const sel = !isReaderPage() && !(st.reader && st.reader.el.contains(el)) ? coverSelector(el) : null;
@@ -655,7 +684,7 @@
     applyLook();
     st.lastHidden = sel;
     showUndo("Disembunyikan di situs ini", () => unhide(sel));
-  }, true);
+  }
 
   // ---------- unduh otomatis (opsional, dimatikan bawaan) ----------
   // Halaman hanya memberi tahu posisi tombol & link chapter berikutnya. Klik & jeda diatur aplikasi.
