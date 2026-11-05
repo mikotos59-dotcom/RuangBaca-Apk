@@ -4,6 +4,12 @@
 
 
 
+
+## 0.2.4
+- **Cek pembaruan diperbaiki:** dulu hanya rilis yang ditandai "Latest" di GitHub yang dilihat, dan versinya hanya dibaca dari tag. Rilis yang ditandai pra-rilis, atau yang tag-nya bukan nomor versi, jadi tidak terdeteksi.
+  - Sekarang semua rilis diperiksa (kecuali draf). Versi aplikasi dibaca dari **nama file .apk** (mis. RuangBaca-0.2.4.apk), jadi tag rilis boleh punya penomoran sendiri (mis. v0.1.5). Kalau nama APK tidak bernomor, baru dipakai tag atau judul rilis.
+  - Di Pengaturan → Pembaruan sekarang tertulis rilis tertinggi yang ditemukan di GitHub (dan tag-nya), supaya mudah dicek kalau ada yang tidak cocok.
+
 ## 0.2.3
 - **DNS diperbaiki:** sebelumnya Ruang Baca hanya memakai DoH (HTTPS ke 1.1.1.1). Kalau jalur itu diganggu penyedia internet, Ruang Baca diam-diam kembali ke DNS bawaan, jadi situs yang diblokir tetap tidak terbuka.
   - Sekarang yang dicoba duluan **DNS-over-TLS (port 853)**, jalur yang sama dengan "DNS pribadi" Android. Kalau gagal, baru DoH, lalu server cadangan (1.0.0.1, 8.8.4.4, dst.). Jalur yang berhasil diingat dan dipakai duluan.

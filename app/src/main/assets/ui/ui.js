@@ -259,7 +259,7 @@
     if (!u) return inSettings ? `<p class="stat">Versi terpasang ${esc(RBUi.version())}.</p><div class="btns"><button class="tb" data-act="updCheck">Cek pembaruan</button></div>` : "";
     if (u.checking) return `<p class="stat">Memeriksa versi terbaru…</p>`;
     if (u.error) return inSettings ? `<p class="stat">Gagal memeriksa: ${esc(u.error)}</p><div class="btns"><button class="tb" data-act="updCheck">Coba lagi</button></div>` : "";
-    if (!u.newer) return inSettings ? `<p class="stat">Sudah versi terbaru (${esc(u.current)}).</p><div class="btns"><button class="tb" data-act="updCheck">Cek lagi</button></div>` : "";
+    if (!u.newer) return inSettings ? `<p class="stat">Sudah versi terbaru (${esc(u.current)}). Rilis tertinggi di GitHub: <b>${esc(u.latest)}</b>${u.tag ? ` (tag ${esc(u.tag)})` : ""}${u.pre ? ", pra-rilis" : ""}.</p><div class="btns"><button class="tb" data-act="updCheck">Cek lagi</button><button class="tb" data-act="updPage">Lihat di GitHub</button></div>` : "";
     const p = u.progress;
     const bar = p ? (p.ready ? `<p class="stat">Unduhan selesai. Ikuti layar pemasangan Android.</p>` : `<div class="ubar"><i style="width:${p.total ? Math.round((p.done / p.total) * 100) : 5}%"></i></div><p class="stat">Mengunduh ${mb(p.done)}${p.total ? " / " + mb(p.total) : ""}…</p>`) : "";
     const notes = inSettings && u.notes ? `<div class="unotes">${esc(u.notes).replace(/\n/g, "<br>")}</div>` : "";

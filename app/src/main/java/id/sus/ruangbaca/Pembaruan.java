@@ -49,36 +49,62 @@ final class Pembaruan {
         return false;
     }
 
-    /** Dijalankan di utas latar. */
+    /** Nomor versi pertama yang ada di teks, mis. "RuangBaca-HP-v0.2.3.apk" → "0.2.3". */
+    static String findVer(String t) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+\\.\\d+(?:\\.\\d+)?)").matcher(t == null ? "" : t);
+        return m.find() ? m.group(1) : "";
+    }
+
+    /**
+     * Dijalankan di utas latar. Semua rilis diperiksa (bukan hanya yang ditandai "Latest"), termasuk pra-rilis.
+     * Versi dibaca dari nama file .apk (paling dipercaya), kalau tidak ada dari tag, lalu judul rilis.
+     */
     JSONObject check() throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL("https://api.github.com/repos/" + REPO + "/releases/latest").openConnection();
+        HttpURLConnection c = (HttpURLConnection) new URL("https://api.github.com/repos/" + REPO + "/releases?per_page=30").openConnection();
         c.setConnectTimeout(15000);
         c.setReadTimeout(20000);
+        c.setUseCaches(false);
         c.setRequestProperty("User-Agent", "RuangBaca-HP");
         c.setRequestProperty("Accept", "application/vnd.github+json");
+        c.setRequestProperty("Cache-Control", "no-cache");
         int code = c.getResponseCode();
-        if (code == 404) throw new Exception("Belum ada rilis di GitHub.");
+        if (code == 404) throw new Exception("Repo " + REPO + " tidak ditemukan atau bukan publik.");
+        if (code == 403) throw new Exception("Batas pengecekan GitHub tercapai. Coba lagi sejam lagi.");
         if (code != 200) throw new Exception("GitHub menjawab " + code + ". Coba lagi nanti.");
         String body;
-        try (InputStream in = c.getInputStream()) { body = new String(DnsAman.readAll(in, 4 << 20), StandardCharsets.UTF_8); }
+        try (InputStream in = c.getInputStream()) { body = new String(DnsAman.readAll(in, 8 << 20), StandardCharsets.UTF_8); }
         finally { c.disconnect(); }
-        JSONObject j = new JSONObject(body);
-        JSONObject asset = null;
-        JSONArray as = j.optJSONArray("assets");
-        for (int i = 0; as != null && i < as.length(); i++) {
-            JSONObject x = as.optJSONObject(i);
-            if (x != null && x.optString("name").toLowerCase().endsWith(".apk")) {
-                asset = new JSONObject().put("name", x.optString("name")).put("url", x.optString("browser_download_url")).put("size", x.optLong("size"));
-                break;
+        JSONArray list = new JSONArray(body);
+        JSONObject best = null, bestAsset = null;
+        String bestVer = "";
+        for (int k = 0; k < list.length(); k++) {
+            JSONObject j = list.optJSONObject(k);
+            if (j == null || j.optBoolean("draft")) continue;
+            JSONObject asset = null;
+            String v = findVer(j.optString("tag_name"));
+            if (v.isEmpty()) v = findVer(j.optString("name"));
+            JSONArray as = j.optJSONArray("assets");
+            for (int i = 0; as != null && i < as.length(); i++) {
+                JSONObject x = as.optJSONObject(i);
+                if (x != null && x.optString("name").toLowerCase().endsWith(".apk")) {
+                    asset = new JSONObject().put("name", x.optString("name")).put("url", x.optString("browser_download_url")).put("size", x.optLong("size"));
+                    // nomor di nama file APK = versi aplikasi sebenarnya (tag rilis bisa punya penomoran sendiri, mis. v0.1.5)
+                    String av = findVer(x.optString("name"));
+                    if (!av.isEmpty()) v = av;
+                    break;
+                }
             }
+            if (v.isEmpty()) continue;
+            if (best == null || newer(v, bestVer)) { best = j; bestVer = v; bestAsset = asset; }
         }
-        String latest = j.optString("tag_name", j.optString("name", "")).replaceFirst("^[vV]", "");
-        String notes = j.optString("body", "");
+        if (best == null) throw new Exception("Belum ada rilis bernomor versi di GitHub.");
+        String notes = best.optString("body", "");
         if (notes.length() > 6000) notes = notes.substring(0, 6000);
         JSONObject o = new JSONObject();
-        o.put("current", current()); o.put("latest", latest); o.put("newer", !latest.isEmpty() && newer(latest, current()));
-        o.put("page", j.optString("html_url", "https://github.com/" + REPO + "/releases"));
-        o.put("notes", notes); o.put("asset", asset == null ? JSONObject.NULL : asset); o.put("at", System.currentTimeMillis());
+        o.put("current", current()); o.put("latest", bestVer); o.put("newer", newer(bestVer, current()));
+        o.put("tag", best.optString("tag_name")); o.put("pre", best.optBoolean("prerelease")); o.put("count", list.length());
+        o.put("page", best.optString("html_url", "https://github.com/" + REPO + "/releases"));
+        o.put("notes", notes); o.put("asset", bestAsset == null ? JSONObject.NULL : bestAsset); o.put("at", System.currentTimeMillis());
         last = o;
         return o;
     }
