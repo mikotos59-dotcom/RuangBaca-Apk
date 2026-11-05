@@ -113,6 +113,8 @@ async function refetchCovers() {
     }
   } finally { refetching = false; }
 }
+let offSeq = 0;
+const offJobs = new Map();
 // sampul otomatis hanya mengganti sampul tebakan, tidak pernah yang dipilih sendiri
 const replaceable = (b) => !b.cover || !["manual", "file"].includes(b.coverSource);
 
@@ -121,7 +123,7 @@ function nativeState() {
   const s = data.settings;
   const popupHosts = {};
   for (const [h, x] of Object.entries(data.d.sites)) if (x.popupHosts && x.popupHosts.length) popupHosts[h] = x.popupHosts;
-  RBUi.setNative(JSON.stringify({ adblock: !!s.adblock, allowAds: s.allowAds || [], popupHosts, theme: s.theme || "normal", search: s.search || "startpage", dns: s.dns || "bawaan", dnsCustom: s.dnsCustom || "", antiAdblock: Object.keys(data.d.sites).filter((h) => data.d.sites[h].antiAdblock) }));
+  RBUi.setNative(JSON.stringify({ adblock: !!s.adblock, allowAds: s.allowAds || [], popupHosts, theme: s.theme || "normal", search: s.search || "startpage", dns: s.dns || "bawaan", dnsCustom: s.dnsCustom || "", barMode: s.barMode || "tampil", dlFolder: s.dlFolder || "ruangbaca", antiAdblock: Object.keys(data.d.sites).filter((h) => data.d.sites[h].antiAdblock) }));
 }
 function toolbarState() {
   const url = E.page.url;
@@ -135,6 +137,25 @@ function notify() { for (const f of E.listeners) try { f(); } catch {} toolbarSt
 // url ditentukan Java dari WebView halaman, bukan dari halaman itu sendiri
 const PAGE = {
   getSite(url) { return data.site(hostOf(url)); },
+  // simpan chapter yang sedang dibuka untuk dibaca offline (gambar diunduh Java ke penyimpanan aplikasi)
+  saveOffline(url, o) {
+    const i = (o && o.info) || {};
+    const images = ((o && o.images) || []).filter((x) => typeof x === "string" && /^(https?:|data:image\/)/.test(x)).slice(0, 600);
+    if (!images.length) throw new Error("Tidak ada gambar yang bisa disimpan.");
+    let b = data.findBook(url) || (i.series && data.findBook(i.series));
+    if (!b) b = data.addBook({ url, title: stripSite(i.title, url, i.siteName) });
+    const pc = parseChapter(url);
+    const ch = i.chapterNum ?? (pc && pc.chapter != null ? pc.chapter : null);
+    let h = 0; for (const c of url) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const key = ch != null ? "ch-" + String(ch).replace(/[^\w.-]/g, "_") : "p-" + h.toString(36);
+    const title = ch != null ? `Ch ${ch}` : stripSite(i.title, url, i.siteName) || "Halaman";
+    const job = ++offSeq;
+    offJobs.set(job, { bookId: b.id, key, ch, title, url, n: images.length });
+    RBUi.offlineSave(JSON.stringify({ job, bookId: b.id, key, referer: url, images }));
+    notify();
+    return { title, n: images.length };
+  },
+  resetLook(url) { data.resetSiteLook(hostOf(url)); return data.site(hostOf(url)); },
   setSite(url, patch) {
     const ok = {};
     // halaman hanya boleh mengubah pengaturan tampilan situsnya sendiri
@@ -231,6 +252,31 @@ window.RBEngine = {
     if (n) { data.save(); if (window.RBHome) RBHome.refresh(); }
   },
   refetchCovers() { refetchCovers(); },
+  offlineProg(j) {
+    let p; try { p = JSON.parse(j); } catch { return; }
+    const jb = offJobs.get(p.job);
+    if (window.RBHome && RBHome.offProg) RBHome.offProg(p, jb);
+    if (!p.finished || !jb) return;
+    offJobs.delete(p.job);
+    const b = data.shelf().find((x) => x.id === jb.bookId);
+    const mb = (p.size / 1048576).toFixed(1).replace(".", ",");
+    if (!p.files || !p.files.length) { RBUi.toast(`${jb.title} gagal disimpan: gambarnya tidak bisa diunduh (mungkin dilindungi situs).`); return; }
+    if (b) {
+      const list = (b.offline || []).filter((x) => x.key !== jb.key);
+      list.push({ key: jb.key, ch: jb.ch, title: jb.title, url: jb.url, files: p.files, size: p.size, t: Date.now() });
+      list.sort((x, y) => (parseFloat(x.ch) || 0) - (parseFloat(y.ch) || 0) || x.t - y.t);
+      b.offline = list; data.save(); notify();
+    }
+    RBUi.toast(`${jb.title} tersimpan offline: ${p.files.length} gambar · ${mb} MB${p.fail ? ` (${p.fail} gagal)` : ""}`);
+  },
+  offlineDelete(bookId, key) {
+    const b = data.shelf().find((x) => x.id === bookId);
+    if (!b) return;
+    b.offline = (b.offline || []).filter((x) => key && x.key !== key);
+    if (!b.offline.length) delete b.offline;
+    RBUi.offlineDelete(bookId, key || "");
+    data.save(); notify();
+  },
   coverDone(id, name) { const f = coverWait.get(id); coverWait.delete(id); if (f) f(name || ""); },
   saveCurrent() {
     const url = E.page.url;

@@ -34,7 +34,8 @@
       <div class="book" data-id="${esc(b.id)}">
         ${b.private ? '<span class="lockb">privat</span>' : ""}
         <div class="cov">${b.coverSrc ? `<img src="${esc(b.coverSrc)}" alt="" loading="lazy">` : `<div class="ph">${esc(b.title)}</div>`}
-          ${b.lastChapter != null ? `<span class="ch">Ch ${esc(b.lastChapter)}</span>` : ""}</div>
+          ${b.lastChapter != null ? `<span class="ch">Ch ${esc(b.lastChapter)}</span>` : ""}
+          ${b.offline && b.offline.length ? `<span class="offb" title="Chapter offline">⤓ ${b.offline.length}</span>` : ""}</div>
         <button class="more" data-more="${esc(b.id)}" aria-label="Menu">⋮</button>
         <div class="t">${esc(b.title)}</div>
         <div class="m">${esc(b.host)}${b.lastRead ? " · " + esc(ago(b.lastRead)) : ""}</div>
@@ -68,6 +69,7 @@
     menu.innerHTML = `
       ${b.lastUrl ? `<button data-a="go">Lanjut baca${b.lastChapter != null ? " (Ch " + esc(b.lastChapter) + ")" : ""}</button>` : ""}
       ${b.seriesUrl ? '<button data-a="series">Buka halaman judul</button>' : ""}
+      ${b.offline && b.offline.length ? `<button data-a="offline">Baca offline (${b.offline.length} chapter)</button>` : ""}
       <button data-a="rename">Ganti judul</button>
       <button data-a="priv">${priv ? "Keluarkan situs dari rak privat" : "Masukkan situs ke rak privat"}</button>
       <button data-a="del" class="dan">Hapus dari rak</button>`;
@@ -83,9 +85,11 @@
       if (a === "go") RBUi.go(b.lastUrl);
       else if (a === "series") RBUi.go(b.seriesUrl);
       else if (a === "rename") renameBook(b);
+      else if (a === "offline") offlineList(b.id);
       else if (a === "priv") togglePrivate(b.host, !priv);
       else if (a === "del") confirmSheet(`Hapus "${b.title}" dari rak?`, "Hapus", () => {
         if (b.cover) RBUi.deleteCover(b.cover);
+        if (b.offline) RBEngine.offlineDelete(b.id, "");
         data.removeBook(b.id); RB.notify();
       });
     };
@@ -161,6 +165,7 @@
     return a.rules ? `${a.rules.toLocaleString("id")} domain iklan${a.updated ? " · diperbarui " + ago(a.updated) : " · daftar bawaan"}` : "Daftar iklan belum dimuat.";
   }
 
+  const barHint = (m) => m === "gulir" ? "Bilah atas hilang saat halaman digulir ke bawah dan muncul lagi saat digulir ke atas." : m === "tombol" ? "Bilah atas disembunyikan; ketuk tombol melayang ☰ untuk memunculkan atau menyembunyikannya. Tombolnya bisa digeser." : "Bilah atas selalu terlihat.";
   function openSettings() {
     const s = S();
     openSheet("Pengaturan", `
@@ -169,7 +174,10 @@
       ${row("Mode gelap situs", "Bawaan untuk situs baru", sw("dark", s.dark))}
       ${row("Hitam putih", "Bawaan untuk situs baru", sw("gray", s.gray))}
       ${row("Warna kertas", "", seg("paper", s.paper, [["putih", "Putih"], ["krem", "Krem"], ["abu", "Abu"]]))}
-      ${row("Kontras", "", range("contrast", s.contrast, 80, 160, "%"))}
+      ${row("Kontras", "Bawaan 115%", range("contrast", s.contrast, 80, 160, "%"))}
+      <div class="btns"><button class="tb" data-act="resetLook">Kembalikan warna & kontras ke bawaan</button></div>
+      ${rowS("Bilah alamat", "Bilah atas berisi alamat dan tombol", seg("barMode", s.barMode || "tampil", [["tampil", "Selalu tampil"], ["gulir", "Sembunyi saat gulir"], ["tombol", "Tombol melayang"]]))}
+      <p class="stat" id="barHint">${barHint(s.barMode)}</p>
       <h4>Membaca</h4>
       ${row("Kecepatan gulir otomatis", "", range("speed", s.speed, 1, 100))}
       ${row("Area ketuk mode per halaman", "Lebar area kiri/kanan untuk pindah halaman", range("pageZone", s.pageZone, 5, 45, "%"))}
@@ -192,6 +200,10 @@
       <p class="stat">${RB.privHosts().length ? "Situs privat: " + RB.privHosts().map(esc).join(", ") : "Belum ada situs privat. Pakai menu ⋮ pada buku untuk memasukkan situsnya."}</p>
       <label>PIN baru<input class="field" id="np" type="password" autocomplete="off" placeholder="minimal 4 karakter"></label>
       <div class="btns"><button class="tb" data-act="pin">Ganti PIN</button></div>
+      <h4>Unduhan</h4>
+      ${rowS("Simpan unduhan ke", "", seg("dlFolder", s.dlFolder || "ruangbaca", [["ruangbaca", "Download/RuangBaca"], ["download", "Download"]]))}
+      <div class="btns"><button class="tb" data-act="dlOpen">Daftar unduhan</button></div>
+      <p class="stat">${esc(offStat())}</p>
       <h4>Pindah data PC ↔ HP</h4>
       <p class="stat">Ekspor membuat file .json berisi rak, favorit, dan pengaturan situs. File dari Ruang Baca PC (Pengaturan → Ekspor) bisa diimpor di sini, dan sebaliknya. Sampul tidak ikut di file, tapi diambil ulang otomatis dari situsnya setelah impor. PIN tidak ikut.</p>
       <div class="btns"><button class="tb pri" data-act="export">Ekspor…</button><button class="tb" data-act="import">Impor…</button></div>
@@ -199,6 +211,7 @@
       ${row("Cek pembaruan otomatis", "Saat aplikasi dibuka, paling sering 12 jam sekali", sw("autoUpdate", s.autoUpdate !== false))}
       <div id="updSt">${updHtml(true)}</div>
       <h4>Lainnya</h4>
+      <div class="btns"><button class="tb" data-act="resetAll">Reset semua pengaturan</button></div>
       <div class="btns"><button class="tb dan" data-act="clear">Hapus riwayat & cookie situs</button></div>
       <p class="stat">Ruang Baca HP ${esc(RBUi.version())} · @SuS_X_x</p>`, async (e) => {
       const t = e.target;
@@ -208,6 +221,7 @@
       if (sg) {
         const box = sg.parentElement; let v = sg.dataset.v;
         setS({ [box.dataset.seg]: v });
+        if (box.dataset.seg === "barMode") $("#barHint").textContent = barHint(v);
         box.querySelectorAll("button").forEach((b) => b.classList.toggle("sel", b === sg));
         return;
       }
@@ -215,6 +229,9 @@
       if (act === "updCheck") { updState = { checking: true }; renderUpd(); RBUi.updateCheck(); return; }
       if (act === "updInstall") { RBUi.updateInstall(); return; }
       if (act === "updPage") { RBUi.updatePage(); return; }
+      if (act === "dlOpen") return downloadsSheet();
+      if (act === "resetLook") return confirmSheet("Kembalikan hitam putih, warna kertas, kontras, dan mode gelap ke bawaan, termasuk yang sudah diubah di tiap situs?", "Kembalikan", () => { data.resetLook(); RB.nativeState(); applyTheme(); RBUi.toast("Warna & kontras kembali ke bawaan."); openSettings(); });
+      if (act === "resetAll") return confirmSheet("Kembalikan SEMUA pengaturan ke awal (tema, DNS, pencarian, iklan, bilah alamat, dll.)? Rak buku, favorit, PIN, dan aturan per situs tidak terhapus.", "Reset", () => { data.resetSettings(); RB.nativeState(); applyTheme(); RBUi.toast("Pengaturan kembali ke awal."); openSettings(); });
       if (act === "dnsTest") { $("#dnsSt").textContent = "Mengetes…"; RBUi.dnsTest(); return; }
       if (act === "dnsSave") {
         const u = $("#dnsC").value.trim();
@@ -291,16 +308,103 @@
   // buku tanpa sampul (mis. hasil impor dari PC): coba ambil sampulnya di belakang layar
   setTimeout(() => { try { RBEngine.refetchCovers(); } catch {} }, 4000);
 
+  // ---------- chapter offline ----------
+  const mbOf = (n) => (n / 1048576).toFixed(1).replace(".", ",") + " MB";
+  function offStat() {
+    let n = 0, size = 0;
+    for (const b of data.shelf()) for (const c of b.offline || []) { n++; size += c.size || 0; }
+    return n ? `Chapter offline: ${n} chapter · ${mbOf(size)} di penyimpanan aplikasi.` : "Belum ada chapter offline. Buka chapter lalu ⋮ → Simpan chapter untuk offline.";
+  }
+  function offlineList(bookId) {
+    const b = data.shelf().find((x) => x.id === bookId);
+    if (!b || !(b.offline || []).length) { closeSheet(); return; }
+    openSheet(b.title, `<p class="stat">Dibaca tanpa internet. Untuk menambah: buka chapter-nya, lalu ⋮ → Simpan chapter untuk offline.</p><p class="stat" id="offProg"></p>
+      <div class="offlist">${b.offline.map((c) => `<div class="offit" data-k="${esc(c.key)}"><button class="go" data-read="${esc(c.key)}"><b>${esc(c.title)}</b><small>${c.files.length} gambar · ${mbOf(c.size || 0)} · ${esc(ago(c.t))}</small></button><button class="tb" data-delk="${esc(c.key)}" aria-label="Hapus">Hapus</button></div>`).join("")}</div>
+      <div class="btns"><button class="tb dan" data-delall>Hapus semua chapter offline judul ini</button></div>`, (e) => {
+      const r = e.target.closest("[data-read]"), d = e.target.closest("[data-delk]");
+      if (r) { closeSheet(); openOffline(bookId, r.dataset.read); }
+      else if (d) { RBEngine.offlineDelete(bookId, d.dataset.delk); offlineList(bookId); }
+      else if (e.target.closest("[data-delall]")) confirmSheet(`Hapus semua chapter offline "${b.title}"?`, "Hapus", () => RBEngine.offlineDelete(bookId, ""));
+    });
+  }
+  let offCur = null;
+  function openOffline(bookId, key) {
+    const b = data.shelf().find((x) => x.id === bookId);
+    const list = (b && b.offline) || [];
+    const i = list.findIndex((c) => c.key === key);
+    if (i < 0) return;
+    const c = list[i];
+    offCur = { bookId, i };
+    const v = $("#offv");
+    const base = `https://appassets.androidplatform.net/offline/${encodeURIComponent(bookId.replace(/[^A-Za-z0-9._-]/g, "_"))}/${encodeURIComponent(c.key.replace(/[^A-Za-z0-9._-]/g, "_"))}/`;
+    v.innerHTML = `<div class="ofbar"><button data-x aria-label="Tutup">✕</button><div class="t"><b>${esc(b.title)}</b><small>${esc(c.title)} · offline</small></div></div>
+      <div class="ofpages">${c.files.map((f) => `<img src="${base}${encodeURIComponent(f)}" loading="lazy" alt="">`).join("")}</div>
+      <div class="ofnav">${i > 0 ? `<button class="tb" data-nav="-1">‹ ${esc(list[i - 1].title)}</button>` : "<span></span>"}${i < list.length - 1 ? `<button class="tb pri" data-nav="1">${esc(list[i + 1].title)} ›</button>` : `<span class="stat">Chapter offline terakhir</span>`}</div>`;
+    v.hidden = false; v.scrollTop = 0;
+    v.onclick = (e) => {
+      if (e.target.closest("[data-x]")) return closeOffline();
+      const n = e.target.closest("[data-nav]");
+      if (n) { const j = offCur.i + +n.dataset.nav; if (list[j]) openOffline(bookId, list[j].key); return; }
+      // ketuk gambar: tampilkan/sembunyikan bilah
+      if (e.target.tagName === "IMG") v.classList.toggle("bare");
+    };
+    // terakhir dibaca
+    try { b.lastChapter = c.ch ?? b.lastChapter; b.lastRead = Date.now(); data.save(); } catch {}
+  }
+  function closeOffline() { const v = $("#offv"); v.hidden = true; v.innerHTML = ""; v.classList.remove("bare"); offCur = null; render(); }
+
+  // ---------- daftar unduhan ----------
+  let dlTimer = null;
+  function downloadsSheet() {
+    clearInterval(dlTimer);
+    const draw = () => {
+      if (sheet.hidden || !$("#dlList")) { clearInterval(dlTimer); return; }
+      let l = [];
+      try { l = JSON.parse(RBUi.downloadsList() || "[]"); } catch {}
+      $("#dlList").innerHTML = l.length ? l.map((d) => {
+        const pct = d.total > 0 ? Math.round((d.done / d.total) * 100) : 0;
+        const st = { selesai: "Selesai", gagal: "Gagal", jeda: "Dijeda (menunggu jaringan)", menunggu: "Menunggu", berjalan: "Mengunduh" }[d.status] || d.status;
+        return `<div class="dlit"><div class="dln"><b>${esc(d.name)}</b><small>${esc(st)}${d.total > 0 ? " · " + (d.status === "selesai" ? mbOf(d.total) : `${mbOf(d.done)} / ${mbOf(d.total)}`) : ""} · ${esc(ago(d.t))}</small>
+          ${d.status === "berjalan" || d.status === "menunggu" || d.status === "jeda" ? `<div class="ubar"><i style="width:${pct}%"></i></div>` : ""}</div>
+          <div class="dlb">${d.status === "selesai" ? `<button class="tb pri" data-open="${d.id}">Buka</button>` : ""}
+          <button class="tb" data-rm="${d.id}" data-file="${d.status === "selesai" ? 0 : 1}">${d.status === "selesai" ? "Hapus" : "Batal"}</button></div></div>`;
+      }).join("") : '<p class="stat">Belum ada unduhan dari Ruang Baca.</p>';
+      if (!l.some((d) => d.status !== "selesai" && d.status !== "gagal")) { clearInterval(dlTimer); dlTimer = null; }
+    };
+    openSheet("Unduhan", `<div id="dlList"></div><div class="btns"><button class="tb" data-folder>Buka folder Download</button></div>`, (e) => {
+      const o = e.target.closest("[data-open]"), r = e.target.closest("[data-rm]");
+      if (o) RBUi.downloadOpen(+o.dataset.open);
+      else if (r) {
+        const id = +r.dataset.rm;
+        if (r.dataset.file === "1") { RBUi.downloadRemove(id, true); draw(); }
+        else openSheet("Hapus unduhan", `<p>Hapus juga file-nya dari HP, atau hanya dari daftar ini?</p><div class="btns"><button class="tb dan" data-f="1">Hapus file</button><button class="tb" data-f="0">Hanya dari daftar</button><button class="tb" data-back>Batal</button></div>`, (ev) => {
+          const f = ev.target.closest("[data-f]");
+          if (f) { RBUi.downloadRemove(id, f.dataset.f === "1"); downloadsSheet(); }
+          if (ev.target.closest("[data-back]")) downloadsSheet();
+        });
+      }
+      else if (e.target.closest("[data-folder]")) RBUi.downloadFolder();
+    });
+    draw();
+    dlTimer = setInterval(draw, 1000);
+  }
+
   // dipanggil Java
   window.RBHome = {
     settings: openSettings,
     adDone() { const el = $("#adst"); if (el) el.textContent = adText(); },
     back() {
+      if (!$("#offv").hidden) { closeOffline(); return true; }
       if (!menu.hidden) { closeMenu(); return true; }
       if (!sheet.hidden) { closeSheet(); return true; }
       return false;
     },
     refresh: render,
+    downloads: () => downloadsSheet(),
+    offProg(p, jb) {
+      const el = $("#offProg");
+      if (el && jb) el.textContent = p.finished ? "" : `Menyimpan ${jb.title}: ${p.done}/${p.total} gambar…`;
+    },
     dnsSt(t) { const el = $("#dnsSt"); if (el) el.textContent = t; },
     upd(j) { try { const o = JSON.parse(j); const dis = updState && updState.dismissed && !o.progress; updState = o; if (dis) o.dismissed = true; renderUpd(); } catch {} },
   };

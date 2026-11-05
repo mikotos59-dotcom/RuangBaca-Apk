@@ -8,6 +8,22 @@
   const H = window.__RB;
   if (!H) return;
   const HP = H.platform === "hp";
+  if (HP && H.scrolled) {
+    const lastTop = new WeakMap();
+    let acc = 0, sent = 0;
+    addEventListener("scroll", (e) => {
+      const t = e.target === document || e.target === document.documentElement || e.target === document.body ? (document.scrollingElement || document.documentElement) : e.target;
+      if (!t || typeof t.scrollTop !== "number") return;
+      const y = t.scrollTop, prev = lastTop.has(t) ? lastTop.get(t) : y;
+      lastTop.set(t, y);
+      acc += y - prev;
+      const now = Date.now();
+      if (Math.abs(acc) >= 24 || y < 8) {
+        if (now - sent > 120 || y < 8) { H.scrolled(Math.round(acc), y < 8); sent = now; }
+        acc = 0;
+      }
+    }, { capture: true, passive: true });
+  }
 
   // Situs dengan Trusted Types (CSP require-trusted-types-for, mis. MangaDex) menolak innerHTML biasa,
   // sehingga tombol melayang dll. gagal dibuat. Pakai kebijakan Trusted Types sendiri; hanya berlaku
@@ -63,6 +79,7 @@
     .seg{display:flex;gap:4px}.seg button{border:1px solid #bbb;background:#fff;border-radius:7px;padding:3px 9px;font-size:12px;cursor:pointer;color:#111}
     .seg button.sel{background:#111;color:#fff;border-color:#111}
     hr{border:0;border-top:1px solid #ddd;margin:4px 0}
+    .mini{border:1px solid #ccc;background:#fff;color:#111;border-radius:8px;padding:4px 10px;font:inherit;font-size:12px}
     .num{min-width:28px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:#111}
     .hud{position:fixed;z-index:5;background:#111;color:#fff;border-radius:99px;padding:5px 12px;font-size:13px;font-weight:700;pointer-events:none;border:2px solid #fff}
     .lbl{position:fixed;z-index:5;top:10px;left:50%;transform:translateX(-50%);background:#111;color:#fff;border-radius:99px;padding:6px 8px 6px 14px;font-size:13px;pointer-events:auto;display:flex;gap:8px;align-items:center;border:2px solid #fff;box-shadow:0 6px 16px rgba(0,0,0,.4)}
@@ -232,7 +249,7 @@
       <button class="it ${site.gray ? "on" : ""}" data-a="gray"><b>Hitam putih (mode manga)</b>${sw()}</button>
       ${site.gray ? `<div class="sub">
         <div class="row">Kertas <span class="seg"><button data-paper="putih" class="${site.paper === "putih" ? "sel" : ""}">Putih</button><button data-paper="krem" class="${site.paper === "krem" ? "sel" : ""}">Krem</button></span></div>
-        <div class="row">Kontras <input type="range" min="80" max="180" value="${site.contrast}" data-r="contrast"><span class="num" id="vc">${site.contrast}</span></div></div>` : ""}
+        <div class="row">Kontras <input type="range" min="80" max="180" value="${site.contrast}" data-r="contrast"><span class="num" id="vc">${site.contrast}</span></div>${H.resetLook ? `<div class="row"><span></span><button class="mini" data-reset="look" title="Hitam putih, kertas, dan kontras kembali ke bawaan">↺ Kembalikan ke bawaan</button></div>` : ""}</div>` : ""}
       <button class="it ${site.dark ? "on" : ""}" data-a="dark"><b>Mode gelap situs</b><small>${site.dark ? (st.darkOn ? "aktif" : "situs sudah gelap") : ""}</small>${sw()}</button>
       ${HP ? "" : `<div class="sub"><div class="row">Ukuran <span class="seg"><button data-z="-1" title="Perkecil (Ctrl −)">−</button><button data-z="0" title="Kembali ke 100%">${site.zoom}%</button><button data-z="1" title="Perbesar (Ctrl +)">+</button></span></div></div>`}
       <hr>
@@ -276,6 +293,7 @@
       renderMenu(); positionMenu();
     }));
     m.querySelectorAll("[data-z]").forEach((b) => b.addEventListener("click", async () => { const z = await H.zoom(+b.dataset.z); if (z) { site.zoom = z; renderMenu(); } }));
+    m.querySelectorAll("[data-reset]").forEach((b) => b.addEventListener("click", async () => { site = await H.resetLook(); applyLook(); checkDark && checkDark(); renderMenu(); positionMenu(); toast("Tampilan situs ini kembali ke bawaan"); }));
     m.querySelectorAll("[data-paper]").forEach((b) => b.addEventListener("click", async () => { site = await H.setSite({ paper: b.dataset.paper }); applyLook(); renderMenu(); }));
     m.querySelectorAll("[data-r]").forEach((r) => {
       r.addEventListener("input", () => {
@@ -1077,6 +1095,12 @@
     if (cmd === "reader") st.reader ? closeReader() : openReader();
     if (cmd === "picker") startPicker();
     if (cmd === "coverpick") startPicker("cover");
+    if (cmd === "offline") {
+      const images = chapterImages();
+      if (!images.length) { toast("Tidak ada gambar chapter di halaman ini. Buka halaman chapter-nya dulu."); return; }
+      try { const r = await H.saveOffline({ images, info: pageInfo() }); toast(`Menyimpan ${r.title || "chapter"} untuk offline: ${images.length} gambar…`, 4000); }
+      catch (e) { toast(String(e.message || e)); }
+    }
     if (cmd === "allowpick") startPicker("allow");
     if (cmd === "unhide-all") { site = await H.removeHidden(null); applyLook(); toast("Semua elemen ditampilkan lagi"); }
     if (cmd === "cover-area") applyAreaCover(true).catch(() => {});

@@ -8,6 +8,16 @@
 
 
 
+
+## 0.3.0
+- **Simpan chapter untuk offline:** buka chapter, lalu ⋮ → *Simpan chapter untuk offline*. Gambar chapter disimpan di penyimpanan aplikasi (tidak muncul di Galeri).
+  - Judul yang punya chapter offline diberi tanda ⤓ di Rak Buku. Menu ⋮ judul → *Baca offline* menampilkan daftarnya: baca tanpa internet, pindah ke chapter offline berikutnya, atau hapus.
+  - Pembaca offline: gulir ke bawah, ketuk gambar untuk menyembunyikan/memunculkan bilah, tombol Kembali HP untuk keluar.
+  - Hanya gambar yang memang tampil dan bisa diunduh dari halaman itu yang disimpan; chapter terkunci tetap terkunci.
+- **Pengelola unduhan:** ⋮ → *Unduhan* (atau Pengaturan → Unduhan). Daftar file yang diunduh dari situs, lengkap dengan progres, tombol Buka, Batal, dan Hapus (hapus file atau hanya dari daftar). Pilihan folder simpan: *Download/RuangBaca* atau *Download*.
+- **Bilah alamat bisa disembunyikan** (Pengaturan → Tampilan → Bilah alamat): *Selalu tampil* (bawaan), *Sembunyi saat gulir* (hilang saat gulir ke bawah, muncul saat gulir ke atas), atau *Tombol melayang* ☰ (bisa digeser) untuk memunculkan/menyembunyikan.
+- **Reset:** tombol *Kembalikan warna & kontras ke bawaan* (bawaan kontras 115%, ikut mengembalikan yang diubah per situs), tombol *↺ Kembalikan ke bawaan* di menu hitam putih pada halaman, dan *Reset semua pengaturan* (rak, favorit, PIN, dan aturan situs tidak terhapus).
+
 ## 0.2.7
 - **Dua tema baru:**
   - **Senja**: cokelat hangat dengan aksen oranye, sedikit cahaya biru. Nyaman untuk baca malam sebelum tidur.

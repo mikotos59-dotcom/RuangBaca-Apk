@@ -39,6 +39,10 @@
     getFab: () => call("getFab"),
     setFab: (pos) => call("setFab", pos),
     setCover: (o) => call("setCover", o),
+    resetLook: () => call("resetLook"),
+    saveOffline: (o) => call("saveOffline", o),
+    // geseran halaman untuk menyembunyikan/memunculkan bilah atas (ditangani Java)
+    scrolled: (dy, top) => send("scroll", dy, top),
     zoom: () => Promise.resolve(null),
     active: (sec) => send("active", sec),
     onCommand: (fn) => handlers.push(fn),

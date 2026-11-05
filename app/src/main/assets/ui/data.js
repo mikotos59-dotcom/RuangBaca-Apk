@@ -6,7 +6,9 @@ const crypto = require("crypto");
 const DEFAULTS = {
   theme: "normal",          // normal | dark | senja | matcha | neon | neonlight
   adblock: true,
-  autoUpdate: true,         // cek versi baru di GitHub saat aplikasi dibuka (paling sering 12 jam sekali)
+  autoUpdate: true,
+  dlFolder: "ruangbaca",    // unduhan HP: ruangbaca (Download/RuangBaca) | download (Download)
+  barMode: "tampil",        // bilah atas: tampil | gulir (sembunyi saat gulir ke bawah) | tombol (tombol melayang)         // cek versi baru di GitHub saat aplikasi dibuka (paling sering 12 jam sekali)
   search: "startpage",      // startpage | google | duckduckgo | bing
   // tampilan hitam putih (bawaan, bisa diganti per situs)
   gray: false, paper: "putih", contrast: 115,
@@ -183,6 +185,24 @@ class Data {
     if (n) this.save();
     return n;
   }
+  // ---------- reset ----------
+  /** Kembalikan warna & kontras (bawaan dan semua situs) ke awal. */
+  resetLook() {
+    for (const k of ["gray", "paper", "contrast", "dark"]) this.d.settings[k] = DEFAULTS[k];
+    for (const s of Object.values(this.d.sites)) for (const k of ["gray", "paper", "contrast", "dark", "zoom", "readerDark", "readerWidth"]) delete s[k];
+    this.save();
+  }
+  resetSiteLook(host) {
+    const s = this.d.sites[host];
+    if (s) for (const k of ["gray", "paper", "contrast", "dark"]) delete s[k];
+    this.save();
+  }
+  /** Semua pengaturan kembali ke awal. Rak, favorit, PIN, dan aturan per situs (sembunyikan, pop-up) tidak tersentuh. */
+  resetSettings() {
+    const keep = { searchV2: true, updAt: this.d.settings.updAt || 0 };
+    this.d.settings = { ...JSON.parse(JSON.stringify(DEFAULTS)), ...keep };
+    this.save();
+  }
   removeBook(id) { this.d.shelf = this.d.shelf.filter((b) => b.id !== id); this.save(); }
 
   // ---------- situs favorit ----------
@@ -196,14 +216,14 @@ class Data {
   removeFavorite(url) { this.d.favorites = this.d.favorites.filter((f) => f.url !== url); this.save(); return this.d.favorites; }
 
   // ---------- ekspor / impor (untuk dipindah ke HP atau PC lain) ----------
-  exportJson() { return { app: "Ruang Baca", version: 1, at: Date.now(), shelf: this.d.shelf.map(({ cover, ...b }) => b), favorites: this.d.favorites, sites: this.d.sites }; }
+  exportJson() { return { app: "Ruang Baca", version: 1, at: Date.now(), shelf: this.d.shelf.map(({ cover, offline, ...b }) => b), favorites: this.d.favorites, sites: this.d.sites }; }
   importJson(j) {
     if (!j || j.app !== "Ruang Baca") throw new Error("Ini bukan file ekspor Ruang Baca.");
     let added = 0;
     for (const b of j.shelf || []) {
       const have = this.d.shelf.find((x) => x.host === b.host && x.slug === b.slug);
       if (have) { if ((b.lastRead || 0) > (have.lastRead || 0)) Object.assign(have, { lastUrl: b.lastUrl, lastChapter: b.lastChapter, lastRead: b.lastRead }); }
-      else { this.d.shelf.push({ ...b, cover: null }); added++; }
+      else { const { offline, ...rest } = b; this.d.shelf.push({ ...rest, cover: null }); added++; }
     }
     for (const f of j.favorites || []) if (!this.d.favorites.some((x) => x.url === f.url)) this.d.favorites.push(f);
     for (const [h, s] of Object.entries(j.sites || {})) this.d.sites[h] = { ...s, ...(this.d.sites[h] || {}), hidden: [...new Set([...(s.hidden || []), ...((this.d.sites[h] || {}).hidden || [])])] };

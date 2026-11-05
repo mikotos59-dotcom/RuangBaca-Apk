@@ -116,7 +116,9 @@ public class MainActivity extends Activity {
 
     private AdBlock ads;
     private WebViewAssetLoader loader;
-    private File dataDir, coverDir;
+    private File dataDir, coverDir, offlineDir;
+    private final ExecutorService offlineQ = Executors.newSingleThreadExecutor();
+    private String dlFolder = "ruangbaca";
     private String userAgent = "";
     private String injectScript = "";
     private boolean docStart = false;
@@ -142,6 +144,10 @@ public class MainActivity extends Activity {
     private String pendingExport = null;
     // DNS aman
     private DnsAman dns;
+    // bilah atas: "tampil" | "gulir" | "tombol"
+    private String barMode = "tampil";
+    private boolean barShown = true, chromeFull = false;
+    private TextView barFab;
     private Pembaruan upd;
     private String dnsKey = "bawaan", dnsCustom = "";
     // ikon situs favorit yang sudah dicoba diambil (supaya tidak diulang terus)
@@ -158,6 +164,8 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         dataDir = new File(getFilesDir(), "data");
         coverDir = new File(getFilesDir(), "covers");
+        offlineDir = new File(getFilesDir(), "offline");
+        offlineDir.mkdirs();
         dataDir.mkdirs();
         coverDir.mkdirs();
         ads = new AdBlock(this);
@@ -166,6 +174,7 @@ public class MainActivity extends Activity {
                 .setDomain(UI_HOST)
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .addPathHandler("/covers/", new WebViewAssetLoader.InternalStoragePathHandler(this, coverDir))
+                .addPathHandler("/offline/", new WebViewAssetLoader.InternalStoragePathHandler(this, offlineDir))
                 .build();
         try { injectScript = asset("jembatan-hp.js") + "\n;\n" + asset("inti.js"); } catch (Exception e) { injectScript = ""; }
         buildLayout();
@@ -282,7 +291,11 @@ public class MainActivity extends Activity {
         stack.addView(page, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         stack.addView(ui, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         stack.addView(fullBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        buildBarFab();
         root.addView(stack, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        android.animation.LayoutTransition lt = new android.animation.LayoutTransition();
+        lt.setDuration(160);
+        root.setLayoutTransition(lt);
         setContentView(root);
     }
 
@@ -409,6 +422,7 @@ public class MainActivity extends Activity {
             public void onPageStarted(WebView v, String url, Bitmap fav) {
                 topHost = hostOf(url);
                 if (!home && !address.hasFocus()) address.setText(url);
+                if ("gulir".equals(barMode) && !barShown) { barShown = true; applyBar(); }
                 hideNotice();
                 if (!docStart) inject();
             }
@@ -512,6 +526,7 @@ public class MainActivity extends Activity {
 
     /** Halaman bertanya ke mesin data. Alamat diambil dari WebView, bukan dari halaman. */
     private void pageCall(int pageId, String method, String args, JavaScriptReplyProxy proxy) {
+        if ("scroll".equals(method)) { onPageScroll(args); return; }
         String url = page.getUrl();
         if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) return;
         int jid = 0;
@@ -594,6 +609,7 @@ public class MainActivity extends Activity {
         btnHome.setAlpha(on && url == null ? 0.35f : 1f);
         if (on) { hideNotice(); evalUi("window.RBHome&&RBHome.refresh()"); }
         updateStar();
+        applyBar();
     }
 
     private void hideKeyboard() {
@@ -627,6 +643,8 @@ public class MainActivity extends Activity {
         } else if (url != null) {
             x.add(0, 12, 0, "Kembali ke halaman terakhir");
         }
+        if (onPage) x.add(0, 14, 0, "Simpan chapter untuk offline");
+        x.add(0, 15, 0, "Unduhan");
         x.add(0, 13, 0, "Pengaturan");
         m.setOnMenuItemClickListener(it -> {
             switch (it.getItemId()) {
@@ -647,6 +665,8 @@ public class MainActivity extends Activity {
                 case 11: openExternal(Uri.parse(page.getUrl())); break;
                 case 12: showHome(false); break;
                 case 13: showHome(true); evalUi("RBHome.settings()"); break;
+                case 14: pageCmd("offline"); break;
+                case 15: showHome(true); evalUi("RBHome.downloads()"); break;
             }
             return true;
         });
@@ -674,10 +694,12 @@ public class MainActivity extends Activity {
             if (mime != null) r.setMimeType(mime);
             r.setTitle(name);
             r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            r.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "RuangBaca/" + name);
+            boolean sub = !"download".equals(dlFolder);
+            r.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, (sub ? "RuangBaca/" : "") + name);
             DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            dm.enqueue(r);
-            toast("Mengunduh " + name + " ke Download/RuangBaca");
+            long id = dm.enqueue(r);
+            recordDownload(id, name, mime);
+            toast("Mengunduh " + name + " ke " + (sub ? "Download/RuangBaca" : "Download") + ". Lihat di ⋮ → Unduhan.");
         } catch (Exception e) {
             toast("Gagal mengunduh: " + e.getMessage());
         }
@@ -732,6 +754,199 @@ public class MainActivity extends Activity {
     }
 
     private void updSend(JSONObject o) { evalUi("window.RBHome&&RBHome.upd(" + q(o.toString()) + ")"); }
+
+    // ================= pengelola unduhan =================
+    private synchronized org.json.JSONArray dlRecords() {
+        try { return new org.json.JSONArray(getSharedPreferences("unduhan", MODE_PRIVATE).getString("list", "[]")); } catch (Exception e) { return new org.json.JSONArray(); }
+    }
+    private synchronized void dlSave(org.json.JSONArray a) { getSharedPreferences("unduhan", MODE_PRIVATE).edit().putString("list", a.toString()).apply(); }
+    private synchronized void recordDownload(long id, String name, String mime) {
+        try {
+            org.json.JSONArray a = dlRecords(), b = new org.json.JSONArray();
+            b.put(new JSONObject().put("id", id).put("name", name).put("mime", mime == null ? "" : mime).put("t", System.currentTimeMillis()));
+            for (int i = 0; i < a.length() && b.length() < 200; i++) b.put(a.get(i));
+            dlSave(b);
+        } catch (Exception ignored) { }
+    }
+    private synchronized void forgetDownload(long id) {
+        org.json.JSONArray a = dlRecords(), b = new org.json.JSONArray();
+        for (int i = 0; i < a.length(); i++) { JSONObject o = a.optJSONObject(i); if (o != null && o.optLong("id") != id) b.put(o); }
+        dlSave(b);
+    }
+    private String downloadsList() {
+        org.json.JSONArray a = dlRecords(), out = new org.json.JSONArray(), keep = new org.json.JSONArray();
+        DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.optJSONObject(i);
+            if (o == null) continue;
+            try (android.database.Cursor c = dm.query(new DownloadManager.Query().setFilterById(o.optLong("id")))) {
+                if (c == null || !c.moveToFirst()) continue; // dihapus dari luar aplikasi
+                int st = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                String s = st == DownloadManager.STATUS_SUCCESSFUL ? "selesai" : st == DownloadManager.STATUS_FAILED ? "gagal" : st == DownloadManager.STATUS_PAUSED ? "jeda" : st == DownloadManager.STATUS_PENDING ? "menunggu" : "berjalan";
+                JSONObject r = new JSONObject(o.toString());
+                r.put("status", s);
+                r.put("done", c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)));
+                r.put("total", c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)));
+                out.put(r); keep.put(o);
+            } catch (Exception ignored) { }
+        }
+        if (keep.length() != a.length()) dlSave(keep);
+        return out.toString();
+    }
+    private void openDownload(long id) {
+        try {
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            Uri u = dm.getUriForDownloadedFile(id);
+            if (u == null) { toast("File belum selesai diunduh atau sudah dihapus."); return; }
+            String mime = dm.getMimeTypeForDownloadedFile(id);
+            Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(u, mime == null ? "*/*" : mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(Intent.createChooser(i, "Buka dengan"));
+        } catch (Exception e) { toast("Tidak ada aplikasi untuk membuka file ini."); }
+    }
+
+    // ================= chapter offline =================
+    /** json = { job, bookId, key, referer, images: [url | data:…] } → files/offline/<buku>/<chapter>/0001.jpg … */
+    private void saveOffline(String json) {
+        int job = 0; String bookId = "", key = "";
+        try {
+            JSONObject o = new JSONObject(json);
+            job = o.optInt("job"); bookId = o.optString("bookId"); key = o.optString("key");
+            String ref = o.optString("referer", "");
+            org.json.JSONArray im = o.optJSONArray("images");
+            File dir = new File(new File(offlineDir, safe(bookId)), safe(key));
+            deleteTree(dir);
+            dir.mkdirs();
+            org.json.JSONArray files = new org.json.JSONArray();
+            long size = 0; int fail = 0, total = im == null ? 0 : im.length();
+            for (int i = 0; i < total; i++) {
+                String u = im.optString(i);
+                try {
+                    byte[] b; String ext;
+                    if (u.startsWith("data:image/")) {
+                        b = Base64.decode(u.substring(u.indexOf(',') + 1), Base64.DEFAULT);
+                        ext = u.startsWith("data:image/png") ? ".png" : u.startsWith("data:image/webp") ? ".webp" : ".jpg";
+                    } else {
+                        String[] t = new String[1];
+                        b = getImage(u, ref, t);
+                        ext = t[0].contains("png") ? ".png" : t[0].contains("webp") ? ".webp" : t[0].contains("gif") ? ".gif" : t[0].contains("avif") ? ".avif" : ".jpg";
+                    }
+                    if (b.length < 200) throw new Exception("kosong");
+                    String n = String.format(java.util.Locale.ROOT, "%04d%s", i + 1, ext);
+                    try (FileOutputStream f = new FileOutputStream(new File(dir, n))) { f.write(b); }
+                    files.put(n); size += b.length;
+                } catch (Exception e) { fail++; }
+                offlineProg(job, bookId, key, i + 1, total, files, size, fail, false);
+            }
+            offlineProg(job, bookId, key, total, total, files, size, fail, true);
+        } catch (Exception e) {
+            offlineProg(job, bookId, key, 0, 0, new org.json.JSONArray(), 0, 0, true);
+        }
+    }
+    private long lastOffProg = 0;
+    private void offlineProg(int job, String bookId, String key, int done, int total, org.json.JSONArray files, long size, int fail, boolean finished) {
+        long now = System.currentTimeMillis();
+        if (!finished && now - lastOffProg < 400) return;
+        lastOffProg = now;
+        try {
+            JSONObject p = new JSONObject().put("job", job).put("bookId", bookId).put("key", key).put("done", done).put("total", total).put("size", size).put("fail", fail).put("finished", finished);
+            if (finished) p.put("files", files);
+            evalUi("RBEngine.offlineProg(" + q(p.toString()) + ")");
+        } catch (Exception ignored) { }
+    }
+    private byte[] getImage(String url, String referer, String[] type) throws Exception {
+        String u = url;
+        for (int i = 0; i < 6; i++) {
+            HttpURLConnection c = open(u);
+            try {
+                c.setInstanceFollowRedirects(false);
+                c.setConnectTimeout(15000); c.setReadTimeout(40000);
+                c.setRequestProperty("User-Agent", userAgent);
+                c.setRequestProperty("Accept", "image/avif,image/webp,image/*,*/*;q=0.8");
+                if (referer != null && !referer.isEmpty()) c.setRequestProperty("Referer", referer);
+                String cookie = CookieManager.getInstance().getCookie(u);
+                if (cookie != null) c.setRequestProperty("Cookie", cookie);
+                int code = c.getResponseCode();
+                if (code >= 300 && code < 400 && c.getHeaderField("Location") != null) { u = new URL(new URL(u), c.getHeaderField("Location")).toString(); continue; }
+                if (code != 200) throw new Exception("HTTP " + code);
+                String ct = c.getContentType() == null ? "" : c.getContentType().toLowerCase();
+                if (ct.startsWith("text/") || ct.contains("json")) throw new Exception("bukan gambar");
+                type[0] = ct;
+                try (InputStream in = c.getInputStream()) { return readStream(in, 40 << 20); }
+            } finally { c.disconnect(); }
+        }
+        throw new Exception("terlalu banyak alihan");
+    }
+    private static void deleteTree(File f) {
+        if (f == null || !f.exists()) return;
+        File[] l = f.listFiles();
+        if (l != null) for (File x : l) deleteTree(x);
+        f.delete();
+    }
+
+    // ================= bilah atas bisa disembunyikan =================
+    private boolean barWanted() { return home || "tampil".equals(barMode) || barShown; }
+    private void applyBar() {
+        if (chromeFull || bar == null) return;
+        boolean want = barWanted() || address.hasFocus();
+        bar.setVisibility(want ? View.VISIBLE : View.GONE);
+        if (!want) progress.setVisibility(View.GONE);
+        if (barFab != null) {
+            barFab.setVisibility(!home && "tombol".equals(barMode) ? View.VISIBLE : View.GONE);
+            barFab.setText(want ? "✕" : "☰");
+            barFab.setContentDescription(want ? "Sembunyikan bilah atas" : "Tampilkan bilah atas");
+        }
+    }
+    private void onPageScroll(String args) {
+        if (!"gulir".equals(barMode) || home || chromeFull) return;
+        int dy = 0; boolean top = false;
+        try { org.json.JSONArray a = new org.json.JSONArray(args); dy = a.optInt(0); top = a.optBoolean(1); } catch (Exception ignored) { }
+        boolean show = barShown;
+        if (top || dy < -20) show = true; else if (dy > 20) show = false;
+        if (show != barShown) { barShown = show; applyBar(); }
+    }
+    @SuppressLint("ClickableViewAccessibility")
+    private void buildBarFab() {
+        barFab = new TextView(this);
+        barFab.setText("☰");
+        barFab.setTextColor(Color.WHITE);
+        barFab.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        barFab.setGravity(Gravity.CENTER);
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(0xaa000000);
+        g.setStroke(dp(1), 0x55ffffff);
+        barFab.setBackground(g);
+        barFab.setElevation(dp(6));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(42), dp(42), Gravity.TOP | Gravity.END);
+        lp.setMargins(dp(10), dp(10), dp(10), dp(10));
+        android.content.SharedPreferences sp = getSharedPreferences("tampilan", MODE_PRIVATE);
+        barFab.setTranslationX(sp.getFloat("fabX", 0));
+        barFab.setTranslationY(sp.getFloat("fabY", 0));
+        barFab.setVisibility(View.GONE);
+        final float[] st = new float[5]; // x0, y0, tx0, ty0, digeser?
+        barFab.setOnTouchListener((v, e) -> {
+            switch (e.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    st[0] = e.getRawX(); st[1] = e.getRawY(); st[2] = v.getTranslationX(); st[3] = v.getTranslationY(); st[4] = 0; return true;
+                case android.view.MotionEvent.ACTION_MOVE: {
+                    float dx = e.getRawX() - st[0], dy = e.getRawY() - st[1];
+                    if (st[4] == 0 && Math.hypot(dx, dy) < dp(8)) return true;
+                    st[4] = 1;
+                    // tetap di dalam area halaman
+                    float minX = -(stack.getWidth() - v.getWidth() - dp(20)), maxY = stack.getHeight() - v.getHeight() - dp(20);
+                    v.setTranslationX(Math.max(minX, Math.min(0, st[2] + dx)));
+                    v.setTranslationY(Math.max(0, Math.min(maxY, st[3] + dy)));
+                    return true;
+                }
+                case android.view.MotionEvent.ACTION_UP:
+                    if (st[4] == 0) { barShown = !barShown; applyBar(); }
+                    else sp.edit().putFloat("fabX", v.getTranslationX()).putFloat("fabY", v.getTranslationY()).apply();
+                    return true;
+            }
+            return false;
+        });
+        stack.addView(barFab, lp);
+    }
 
     // ================= sampul dari layar =================
     private static final Pattern META_IMG = Pattern.compile("<meta\\b[^>]*(?:og:image|twitter:image)[^>]*>", Pattern.CASE_INSENSITIVE);
@@ -927,7 +1142,9 @@ public class MainActivity extends Activity {
     }
 
     private void setChrome(boolean show) {
-        bar.setVisibility(show ? View.VISIBLE : View.GONE);
+        chromeFull = !show;
+        bar.setVisibility(show && barWanted() ? View.VISIBLE : View.GONE);
+        if (barFab != null) barFab.setVisibility(show && !home && "tombol".equals(barMode) ? View.VISIBLE : View.GONE);
         if (!show) { progress.setVisibility(View.GONE); notice.setVisibility(View.GONE); }
         View d = getWindow().getDecorView();
         int f = d.getSystemUiVisibility();
@@ -1011,7 +1228,10 @@ public class MainActivity extends Activity {
                 popupHosts = ph;
                 String th = o.optString("theme", "normal"), se = o.optString("search", "startpage");
                 String dk = o.optString("dns", "bawaan"), dc = o.optString("dnsCustom", "");
+                String bm = o.optString("barMode", "tampil");
+                dlFolder = o.optString("dlFolder", "ruangbaca");
                 main.post(() -> {
+                    if (!bm.equals(barMode)) { barMode = bm; barShown = !"tombol".equals(bm); applyBar(); }
                     search = se;
                     if (!dk.equals(dnsKey) || !dc.equals(dnsCustom)) { dnsKey = dk; dnsCustom = dc; applyDns(true); }
                     if (!th.equals(theme)) { theme = th; applyTheme(); }
@@ -1024,6 +1244,28 @@ public class MainActivity extends Activity {
                 boolean s = new JSONObject(json).optBoolean("saved");
                 main.post(() -> { saved = s; updateStar(); });
             } catch (Exception ignored) { }
+        }
+        // ---------- pengelola unduhan ----------
+        @JavascriptInterface
+        public String downloadsList() { return MainActivity.this.downloadsList(); }
+        @JavascriptInterface
+        public void downloadOpen(long id) { main.post(() -> openDownload(id)); }
+        @JavascriptInterface
+        public void downloadRemove(long id, boolean deleteFile) {
+            if (deleteFile) try { ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).remove(id); } catch (Exception ignored) { }
+            forgetDownload(id);
+        }
+        @JavascriptInterface
+        public void downloadFolder() {
+            main.post(() -> { try { startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e) { toast("Pengelola file tidak ditemukan."); } });
+        }
+        // ---------- chapter offline ----------
+        @JavascriptInterface
+        public void offlineSave(String json) { offlineQ.execute(() -> saveOffline(json)); }
+        @JavascriptInterface
+        public void offlineDelete(String bookId, String key) {
+            File d = key == null || key.isEmpty() ? new File(offlineDir, safe(bookId)) : new File(new File(offlineDir, safe(bookId)), safe(key));
+            bg.execute(() -> deleteTree(d));
         }
         @JavascriptInterface
         public void dnsTest() {
