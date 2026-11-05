@@ -101,3 +101,10 @@ label .field { margin-top: 4px; color: var(--ink); }
 .fav .ico.img { background: #fff; border: 1px solid var(--line); overflow: hidden; }
 .fav .ico.img img { width: 30px; height: 30px; object-fit: contain; image-rendering: auto; }
 select.field { -webkit-appearance: menulist; appearance: menulist; }
+/* 0.2.2: pembaruan */
+.updbar { margin: 4px 16px 12px; padding: 12px 14px; border: 1px solid var(--accent, #b0412e); border-radius: 14px; background: var(--card, rgba(0,0,0,.03)); }
+.updbar .stat { margin: 0 0 8px; }
+.updbar .btns { margin: 0; }
+.ubar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 6px 0; }
+.ubar i { display: block; height: 100%; background: var(--accent, #b0412e); transition: width .3s; }
+.unotes { font-size: 13px; color: var(--muted, #666); max-height: 160px; overflow: auto; border-left: 3px solid var(--line); padding-left: 10px; margin: 6px 0 10px; }

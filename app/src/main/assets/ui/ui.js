@@ -192,6 +192,9 @@
       <h4>Pindah data PC ↔ HP</h4>
       <p class="stat">Ekspor membuat file .json berisi rak, favorit, dan pengaturan situs. File dari Ruang Baca PC (Pengaturan → Ekspor) bisa diimpor di sini, dan sebaliknya. Sampul tidak ikut di file, tapi diambil ulang otomatis dari situsnya setelah impor. PIN tidak ikut.</p>
       <div class="btns"><button class="tb pri" data-act="export">Ekspor…</button><button class="tb" data-act="import">Impor…</button></div>
+      <h4>Pembaruan</h4>
+      ${row("Cek pembaruan otomatis", "Saat aplikasi dibuka, paling sering 12 jam sekali", sw("autoUpdate", s.autoUpdate !== false))}
+      <div id="updSt">${updHtml(true)}</div>
       <h4>Lainnya</h4>
       <div class="btns"><button class="tb dan" data-act="clear">Hapus riwayat & cookie situs</button></div>
       <p class="stat">Ruang Baca HP ${esc(RBUi.version())} · @SuS_X_x</p>`, async (e) => {
@@ -206,6 +209,9 @@
         return;
       }
       const act = t.closest("[data-act]")?.dataset.act;
+      if (act === "updCheck") { updState = { checking: true }; renderUpd(); RBUi.updateCheck(); return; }
+      if (act === "updInstall") { RBUi.updateInstall(); return; }
+      if (act === "updPage") { RBUi.updatePage(); return; }
       if (act === "dnsSave") {
         const u = $("#dnsC").value.trim();
         if (u && !/^https:\/\/[^\s/]+\.[^\s]+$/.test(u)) return RBUi.toast("Alamat DNS harus alamat DoH, misalnya https://dns.contoh.id/dns-query");
@@ -242,6 +248,33 @@
     };
   }
 
+  // ---------- pembaruan (rilis GitHub RuangBaca-Apk) ----------
+  let updState = null;
+  const mb = (n) => (n / 1048576).toFixed(1).replace(".", ",") + " MB";
+  function updHtml(inSettings) {
+    const u = updState;
+    if (!u) return inSettings ? `<p class="stat">Versi terpasang ${esc(RBUi.version())}.</p><div class="btns"><button class="tb" data-act="updCheck">Cek pembaruan</button></div>` : "";
+    if (u.checking) return `<p class="stat">Memeriksa versi terbaru…</p>`;
+    if (u.error) return inSettings ? `<p class="stat">Gagal memeriksa: ${esc(u.error)}</p><div class="btns"><button class="tb" data-act="updCheck">Coba lagi</button></div>` : "";
+    if (!u.newer) return inSettings ? `<p class="stat">Sudah versi terbaru (${esc(u.current)}).</p><div class="btns"><button class="tb" data-act="updCheck">Cek lagi</button></div>` : "";
+    const p = u.progress;
+    const bar = p ? (p.ready ? `<p class="stat">Unduhan selesai. Ikuti layar pemasangan Android.</p>` : `<div class="ubar"><i style="width:${p.total ? Math.round((p.done / p.total) * 100) : 5}%"></i></div><p class="stat">Mengunduh ${mb(p.done)}${p.total ? " / " + mb(p.total) : ""}…</p>`) : "";
+    const notes = inSettings && u.notes ? `<div class="unotes">${esc(u.notes).replace(/\n/g, "<br>")}</div>` : "";
+    return `<p class="stat"><b>Versi baru ${esc(u.latest)} tersedia</b> (terpasang ${esc(u.current)}).</p>${notes}${bar}
+      ${p ? "" : `<div class="btns"><button class="tb pri" data-act="updInstall">${u.asset ? `Perbarui${u.asset.size ? " · " + mb(u.asset.size) : ""}` : "Buka halaman rilis"}</button>${inSettings ? `<button class="tb" data-act="updPage">Lihat di GitHub</button>` : `<button class="tb" data-act="updLater">Nanti</button>`}</div>`}`;
+  }
+  function renderUpd() {
+    const st = $("#updSt"); if (st) st.innerHTML = updHtml(true);
+    const b = $("#updBar"), h = updHtml(false);
+    b.hidden = !h || updState?.dismissed; b.innerHTML = h;
+  }
+  $("#updBar").addEventListener("click", (e) => {
+    const a = e.target.closest("[data-act]")?.dataset.act;
+    if (a === "updInstall") RBUi.updateInstall();
+    if (a === "updLater") { updState.dismissed = true; renderUpd(); }
+  });
+  if (S().autoUpdate !== false && Date.now() - (+S().updAt || 0) > 12 * 3600e3) { data.settings.updAt = Date.now(); data.save(); setTimeout(() => { try { RBUi.updateCheck(); } catch {} }, 2500); }
+
   // buku tanpa sampul (mis. hasil impor dari PC): coba ambil sampulnya di belakang layar
   setTimeout(() => { try { RBEngine.refetchCovers(); } catch {} }, 4000);
 
@@ -255,6 +288,7 @@
       return false;
     },
     refresh: render,
+    upd(j) { try { const o = JSON.parse(j); const dis = updState && updState.dismissed && !o.progress; updState = o; if (dis) o.dismissed = true; renderUpd(); } catch {} },
   };
 
   // ---------- event ----------

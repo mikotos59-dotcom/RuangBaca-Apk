@@ -2,6 +2,13 @@
 
 
 
+
+## 0.2.2
+- **Tombol Perbarui**: Ruang Baca mengecek rilis terbaru di GitHub (mikotos59-dotcom/RuangBaca-Apk). Kalau ada versi baru, muncul kotak di atas Rak Buku dengan tombol **Perbarui**: APK diunduh, lalu layar pemasangan Android terbuka. Data rak tidak hilang.
+  - Cek otomatis saat aplikasi dibuka (paling sering 12 jam sekali), bisa dimatikan. Cek manual di Pengaturan → Pembaruan, lengkap dengan catatan rilisnya.
+  - Pertama kali, Android meminta izin "pasang aplikasi tidak dikenal" untuk Ruang Baca.
+  - Supaya bisa menimpa versi lama, APK di rilis harus dirakit dengan kunci tanda tangan yang sama (Pabrik SuS).
+
 ## 0.2.1
 - **Mesin pencari bawaan: Startpage** (hasil pencarian Google tanpa melacak dan tanpa menyimpan riwayatmu). Pilihan Google / DuckDuckGo / Bing tetap ada di Pengaturan. Pengguna lama yang masih memakai Google otomatis dipindah sekali ke Startpage.
 - **Sampul setelah impor dari PC:** file ekspor memang tidak membawa gambar sampul. Sekarang setelah impor, sampul langsung diambil lagi dari halaman judul masing-masing (satu per satu di belakang layar). Buku yang belum bersampul juga dicoba lagi saat aplikasi dibuka (paling sering 3 hari sekali per buku).

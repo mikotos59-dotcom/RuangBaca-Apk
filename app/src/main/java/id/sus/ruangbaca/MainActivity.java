@@ -142,6 +142,7 @@ public class MainActivity extends Activity {
     private String pendingExport = null;
     // DNS aman
     private DnsAman dns;
+    private Pembaruan upd;
     private String dnsKey = "bawaan", dnsCustom = "";
     // ikon situs favorit yang sudah dicoba diambil (supaya tidak diulang terus)
     private final Set<String> iconTried = Collections.synchronizedSet(new java.util.HashSet<>());
@@ -730,6 +731,8 @@ public class MainActivity extends Activity {
         return (HttpURLConnection) new URL(u).openConnection();
     }
 
+    private void updSend(JSONObject o) { evalUi("window.RBHome&&RBHome.upd(" + q(o.toString()) + ")"); }
+
     // ================= sampul dari layar =================
     private static final Pattern META_IMG = Pattern.compile("<meta\\b[^>]*(?:og:image|twitter:image)[^>]*>", Pattern.CASE_INSENSITIVE);
     private static final Pattern META_CONTENT = Pattern.compile("content\\s*=\\s*[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE);
@@ -1019,6 +1022,27 @@ public class MainActivity extends Activity {
                 main.post(() -> { saved = s; updateStar(); });
             } catch (Exception ignored) { }
         }
+        // ---------- pembaruan dari GitHub ----------
+        @JavascriptInterface
+        public void updateCheck() {
+            if (upd == null) upd = new Pembaruan(MainActivity.this);
+            bg.execute(() -> {
+                try { updSend(upd.check()); }
+                catch (Exception e) { try { updSend(new JSONObject().put("error", e.getMessage())); } catch (Exception ignored) { } }
+            });
+        }
+        @JavascriptInterface
+        public void updateInstall() {
+            main.post(() -> {
+                try {
+                    if (upd == null) throw new Exception("Cek pembaruan dulu.");
+                    String r = upd.install(p -> updSend(p));
+                    if ("izin".equals(r)) toast("Izinkan Ruang Baca memasang aplikasi, lalu tekan Perbarui lagi.");
+                } catch (Exception e) { toast(e.getMessage()); }
+            });
+        }
+        @JavascriptInterface
+        public void updatePage() { main.post(() -> { if (upd == null) upd = new Pembaruan(MainActivity.this); upd.openPage(); }); }
         @JavascriptInterface
         public void downloadPageCover(int id, String pageUrl, String bookId) {
             bg.execute(() -> {

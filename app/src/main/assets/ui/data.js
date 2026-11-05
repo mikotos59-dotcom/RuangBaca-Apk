@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const DEFAULTS = {
   theme: "normal",          // normal | dark | batik
   adblock: true,
+  autoUpdate: true,         // cek versi baru di GitHub saat aplikasi dibuka (paling sering 12 jam sekali)
   search: "startpage",      // startpage | google | duckduckgo | bing
   // tampilan hitam putih (bawaan, bisa diganti per situs)
   gray: false, paper: "putih", contrast: 115,
