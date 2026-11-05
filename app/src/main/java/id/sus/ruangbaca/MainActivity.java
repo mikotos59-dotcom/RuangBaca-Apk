@@ -9,6 +9,14 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.util.Base64;
+import androidx.webkit.ProxyConfig;
+import androidx.webkit.ProxyController;
+import androidx.webkit.WebViewFeature;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -131,6 +139,11 @@ public class MainActivity extends Activity {
     private String noticeUrl = null;
     private boolean noticeIsPopup = false;
     private String pendingExport = null;
+    // DNS aman
+    private DnsAman dns;
+    private String dnsKey = "bawaan", dnsCustom = "";
+    // ikon situs favorit yang sudah dicoba diambil (supaya tidak diulang terus)
+    private final Set<String> iconTried = Collections.synchronizedSet(new java.util.HashSet<>());
 
     private static final class Pend {
         final int id; final JavaScriptReplyProxy proxy;
@@ -424,6 +437,14 @@ public class MainActivity extends Activity {
             }
             @Override
             public void onReceivedTitle(WebView v, String title) { syncVisit(); }
+            @Override
+            public void onReceivedIcon(WebView v, Bitmap icon) {
+                String url = v.getUrl();
+                if (icon == null || url == null || !url.startsWith("http")) return;
+                String host = Uri.parse(url).getHost();
+                String d = iconData(icon);
+                if (host != null && d != null) evalUi("RBEngine.favIcon(" + q(host) + "," + q(d) + ")");
+            }
 
             @Override
             public boolean onCreateWindow(WebView v, boolean dialog, boolean gesture, Message result) {
@@ -667,7 +688,7 @@ public class MainActivity extends Activity {
         try {
             String u = url;
             for (int i = 0; i < 6; i++) {
-                c = (HttpURLConnection) new URL(u).openConnection();
+                c = open(u);
                 c.setInstanceFollowRedirects(false);
                 c.setConnectTimeout(15000);
                 c.setReadTimeout(30000);
@@ -699,6 +720,105 @@ public class MainActivity extends Activity {
             if (c != null) c.disconnect();
         }
         evalUi("RBEngine.coverDone(" + id + "," + q(name) + ")");
+    }
+
+    // sambungan keluar ikut DNS aman kalau sedang dipakai
+    private HttpURLConnection open(String u) throws Exception {
+        if (dns != null && !"bawaan".equals(dnsKey) && dns.port() > 0)
+            return (HttpURLConnection) new URL(u).openConnection(new java.net.Proxy(java.net.Proxy.Type.HTTP, new java.net.InetSocketAddress("127.0.0.1", dns.port())));
+        return (HttpURLConnection) new URL(u).openConnection();
+    }
+
+    // ================= DNS aman =================
+    private void applyDns(boolean reload) {
+        String url = DnsAman.urlFor(dnsKey, dnsCustom);
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+            if (!url.isEmpty()) toast("DNS khusus butuh Android System WebView yang lebih baru. Perbarui lewat Play Store.");
+            return;
+        }
+        Runnable done = () -> { if (reload && !home && page.getUrl() != null) page.reload(); };
+        if (url.isEmpty()) {
+            ProxyController.getInstance().clearProxyOverride(main::post, done);
+            return;
+        }
+        if (dns == null) dns = new DnsAman(userAgent);
+        dns.setServer(url);
+        bg.execute(() -> {
+            try {
+                int port = dns.start();
+                main.post(() -> {
+                    ProxyConfig cfg = new ProxyConfig.Builder().addProxyRule("127.0.0.1:" + port).addDirect(ProxyConfig.MATCH_ALL_SCHEMES).build();
+                    ProxyController.getInstance().setProxyOverride(cfg, main::post, done);
+                });
+            } catch (Exception e) { toast("DNS tidak bisa dipakai: " + e.getMessage()); }
+        });
+    }
+
+    // ================= ikon situs =================
+    private static String iconData(Bitmap b) {
+        try {
+            if (b == null || b.getWidth() < 8) return null;
+            int s = 64;
+            Bitmap o = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888);
+            new Canvas(o).drawBitmap(b, new Rect(0, 0, b.getWidth(), b.getHeight()), new Rect(0, 0, s, s), new Paint(Paint.FILTER_BITMAP_FLAG));
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            o.compress(Bitmap.CompressFormat.PNG, 100, out);
+            return "data:image/png;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+        } catch (Exception e) { return null; }
+    }
+    private static final Pattern LINK_TAG = Pattern.compile("<link\\b[^>]*>", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ATTR = Pattern.compile("(rel|href|sizes)\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)", Pattern.CASE_INSENSITIVE);
+    /** Ambil ikon dari halaman situs: apple-touch-icon / icon di HTML, lalu /favicon.ico. */
+    private String loadIcon(String pageUrl) {
+        List<String> cand = new ArrayList<>();
+        try {
+            byte[] html = get(pageUrl, "text/html,*/*", 512 << 10);
+            String h = new String(html, StandardCharsets.UTF_8);
+            java.util.regex.Matcher m = LINK_TAG.matcher(h);
+            List<String> touch = new ArrayList<>(), icon = new ArrayList<>();
+            while (m.find()) {
+                String rel = "", href = "";
+                java.util.regex.Matcher a = ATTR.matcher(m.group());
+                while (a.find()) {
+                    String v = a.group(2).replaceAll("^[\"']|[\"']$", "");
+                    if (a.group(1).equalsIgnoreCase("rel")) rel = v.toLowerCase(); else if (a.group(1).equalsIgnoreCase("href")) href = v;
+                }
+                if (href.isEmpty() || !rel.contains("icon")) continue;
+                String abs = new URL(new URL(pageUrl), href.replace("&amp;", "&")).toString();
+                if (rel.contains("apple-touch")) touch.add(abs); else icon.add(abs);
+            }
+            cand.addAll(touch); cand.addAll(icon);
+        } catch (Exception ignored) { }
+        try { cand.add(new URL(new URL(pageUrl), "/favicon.ico").toString()); } catch (Exception ignored) { }
+        for (String u : cand) {
+            try {
+                if (u.startsWith("data:")) continue;
+                byte[] b = get(u, "image/*,*/*;q=0.8", 2 << 20);
+                Bitmap bm = BitmapFactory.decodeByteArray(b, 0, b.length);
+                String d = iconData(bm);
+                if (d != null) return d;
+            } catch (Exception ignored) { }
+        }
+        return null;
+    }
+    private byte[] get(String url, String accept, int max) throws Exception {
+        String u = url;
+        for (int i = 0; i < 6; i++) {
+            HttpURLConnection c = open(u);
+            try {
+                c.setInstanceFollowRedirects(false);
+                c.setConnectTimeout(12000); c.setReadTimeout(20000);
+                c.setRequestProperty("User-Agent", userAgent);
+                c.setRequestProperty("Accept", accept);
+                String cookie = CookieManager.getInstance().getCookie(u);
+                if (cookie != null) c.setRequestProperty("Cookie", cookie);
+                int code = c.getResponseCode();
+                if (code >= 300 && code < 400 && c.getHeaderField("Location") != null) { u = new URL(new URL(u), c.getHeaderField("Location")).toString(); continue; }
+                if (code != 200) throw new Exception("HTTP " + code);
+                try (InputStream in = c.getInputStream()) { return readStream(in, max); }
+            } finally { c.disconnect(); }
+        }
+        throw new Exception("terlalu banyak alihan");
     }
 
     private static byte[] readStream(InputStream in, int max) throws Exception {
@@ -844,8 +964,10 @@ public class MainActivity extends Activity {
                 if (p != null) for (java.util.Iterator<String> it = p.keys(); it.hasNext(); ) { String k = it.next(); ph.put(wwwless(k), toSet(p.optJSONArray(k))); }
                 popupHosts = ph;
                 String th = o.optString("theme", "normal"), se = o.optString("search", "google");
+                String dk = o.optString("dns", "bawaan"), dc = o.optString("dnsCustom", "");
                 main.post(() -> {
                     search = se;
+                    if (!dk.equals(dnsKey) || !dc.equals(dnsCustom)) { dnsKey = dk; dnsCustom = dc; applyDns(true); }
                     if (!th.equals(theme)) { theme = th; applyTheme(); }
                 });
             } catch (Exception ignored) { }
@@ -856,6 +978,14 @@ public class MainActivity extends Activity {
                 boolean s = new JSONObject(json).optBoolean("saved");
                 main.post(() -> { saved = s; updateStar(); });
             } catch (Exception ignored) { }
+        }
+        @JavascriptInterface
+        public void fetchIcon(String host, String url) {
+            if (host == null || url == null || !iconTried.add(host)) return;
+            bg.execute(() -> {
+                String d = loadIcon(url);
+                if (d != null) evalUi("RBEngine.favIcon(" + q(host) + "," + q(d) + ")");
+            });
         }
         @JavascriptInterface
         public void go(String url) { main.post(() -> MainActivity.this.go(url)); }

@@ -1,5 +1,13 @@
 # Ruang Baca HP — Catatan Rilis
 
+
+## 0.2.0
+- **Perbaikan:** ikon situs favorit sekarang muncul. Ikon diambil otomatis dari situsnya (ikon aplikasi/apple-touch-icon, ikon halaman, lalu favicon.ico), dan ikut diperbarui saat situsnya dibuka. Kalau situs tidak punya ikon, tetap tampil huruf berwarna.
+- **DNS (opsional)** di Pengaturan: Bawaan, Cloudflare 1.1.1.1, Google 8.8.8.8, Quad9, AdGuard (ikut blok iklan), atau alamat DoH sendiri.
+  - Hanya berlaku di Ruang Baca; setelan DNS HP tidak diubah.
+  - Lewat jalur terenkripsi (DNS-over-HTTPS). Sambungan ke situs tetap HTTPS ujung ke ujung.
+  - Butuh Android System WebView yang cukup baru (versi 2019 ke atas); kalau terlalu lama, muncul pemberitahuan.
+
 ## 0.1.0 (versi HP pertama, "inti dulu")
 - Browser komik dengan kolom alamat/pencarian, tombol ☆ simpan ke rak, 📚 Rak Buku, dan menu ⋮.
 - Blok iklan tingkat domain (EasyList + ABPindo + filter DNS AdGuard, diperbarui otomatis tiap minggu). Hanya iklan dari situs lain yang diblok. Bisa diizinkan per situs lewat menu ⋮.

@@ -87,7 +87,7 @@ function nativeState() {
   const s = data.settings;
   const popupHosts = {};
   for (const [h, x] of Object.entries(data.d.sites)) if (x.popupHosts && x.popupHosts.length) popupHosts[h] = x.popupHosts;
-  RBUi.setNative(JSON.stringify({ adblock: !!s.adblock, allowAds: s.allowAds || [], popupHosts, theme: s.theme || "normal", search: s.search || "google", antiAdblock: Object.keys(data.d.sites).filter((h) => data.d.sites[h].antiAdblock) }));
+  RBUi.setNative(JSON.stringify({ adblock: !!s.adblock, allowAds: s.allowAds || [], popupHosts, theme: s.theme || "normal", search: s.search || "google", dns: s.dns || "bawaan", dnsCustom: s.dnsCustom || "", antiAdblock: Object.keys(data.d.sites).filter((h) => data.d.sites[h].antiAdblock) }));
 }
 function toolbarState() {
   const url = E.page.url;
@@ -183,6 +183,14 @@ window.RBEngine = {
     E.page = { url: url || "", title: title || "" };
     if (url && /^https?:/.test(url)) { const b = data.track(url); if (b) notify(); }
     toolbarState();
+  },
+  // ikon situs favorit dari Java (data:image/png). Disimpan terpisah dari ikon versi PC (nama file).
+  favIcon(host, icon) {
+    if (!/^data:image\//.test(icon || "")) return;
+    const w = (x) => String(x || "").replace(/^www\./, "");
+    let n = 0;
+    for (const f of data.favorites()) if (w(f.host) === w(host) && f.iconData !== icon) { f.iconData = icon; n++; }
+    if (n) { data.save(); if (window.RBHome) RBHome.refresh(); }
   },
   coverDone(id, name) { const f = coverWait.get(id); coverWait.delete(id); if (f) f(name || ""); },
   saveCurrent() {

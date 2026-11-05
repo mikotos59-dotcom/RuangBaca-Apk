@@ -49,10 +49,12 @@
     const f = RB.favList();
     $("#favs").innerHTML = f.length ? f.map((x) => `
       <div class="fav" data-url="${esc(x.url)}">
-        <span class="ico" style="background:${colorOf(x.host)}">${esc((x.title || x.host).trim()[0] || "?").toUpperCase()}</span>
+        ${x.iconData ? `<span class="ico img"><img src="${esc(x.iconData)}" alt=""></span>` : `<span class="ico" style="background:${colorOf(x.host)}">${esc((x.title || x.host).trim()[0] || "?").toUpperCase()}</span>`}
         <b>${esc(x.title)}</b><small>${esc(RB.wwwless(x.host))}</small>
         <button class="del" data-del="${esc(x.url)}" aria-label="Hapus">✕</button>
       </div>`).join("") : '<p class="hint">Simpan situs komik yang sering dibuka di sini.</p>';
+    // ambil ikon yang belum ada (sekali per sesi per situs; Java yang mencegah pengulangan)
+    for (const x of f) if (!x.iconData) try { RBUi.fetchIcon(x.host, x.url); } catch {}
   }
   function render() { renderShelf(); renderFavs(); }
 
@@ -177,6 +179,10 @@
       ${row("Singkirkan pop-up Pro/koin", "", sw("popup", s.popup))}
       ${row("Label pop-up yang disingkirkan", "", seg("label", s.label, [["5", "5 detik"], ["tetap", "Tetap"], ["sembunyi", "Sembunyi"]]))}
       ${s.allowAds && s.allowAds.length ? `<p class="stat">Iklan diizinkan di: ${s.allowAds.map(esc).join(", ")}</p><div class="btns"><button class="tb" data-act="clearAllow">Blok lagi di semua situs</button></div>` : ""}
+      <h4>DNS (opsional)</h4>
+      <p class="stat">Situs yang tidak bisa dibuka karena diblokir lewat DNS penyedia internet biasanya bisa terbuka dengan DNS lain. Hanya berlaku di Ruang Baca, setelan HP tidak diubah. Lewat jalur terenkripsi (DNS-over-HTTPS).</p>
+      <label>Server DNS<select class="field" data-sel="dns">${[["bawaan", "Bawaan (penyedia internet)"], ["cloudflare", "Cloudflare · 1.1.1.1 (disarankan)"], ["google", "Google · 8.8.8.8"], ["quad9", "Quad9 · 9.9.9.9 (blok situs berbahaya)"], ["adguard", "AdGuard (ikut blok iklan)"], ["kustom", "Alamat sendiri…"]].map(([v, l]) => `<option value="${v}" ${(s.dns || "bawaan") === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+      <div id="dnsK" ${s.dns === "kustom" ? "" : "hidden"}><label>Alamat DoH<input class="field" id="dnsC" placeholder="https://dns.contoh.id/dns-query" value="${esc(s.dnsCustom || "")}" spellcheck="false" autocapitalize="off"></label><div class="btns"><button class="tb" data-act="dnsSave">Pakai</button></div></div>
       <h4>Pencarian</h4>
       ${row("Mesin pencari", "", seg("search", s.search, [["google", "Google"], ["duckduckgo", "DuckDuckGo"], ["bing", "Bing"]]))}
       <h4>Rak privat</h4>
@@ -200,6 +206,12 @@
         return;
       }
       const act = t.closest("[data-act]")?.dataset.act;
+      if (act === "dnsSave") {
+        const u = $("#dnsC").value.trim();
+        if (u && !/^https:\/\/[^\s/]+\.[^\s]+$/.test(u)) return RBUi.toast("Alamat DNS harus alamat DoH, misalnya https://dns.contoh.id/dns-query");
+        setS({ dnsCustom: u }); RBUi.toast(u ? "DNS diterapkan." : "Alamat DNS dikosongkan.");
+        return;
+      }
       if (act === "adUpdate") { RBUi.adUpdate(); $("#adst").textContent = "Memperbarui…"; }
       else if (act === "clearAllow") { setS({ allowAds: [] }); openSettings(); }
       else if (act === "pin") {
@@ -218,7 +230,16 @@
       $("#v-" + k).textContent = v + (k === "contrast" || k === "pageZone" ? "%" : "");
       data.settings[k] = v; data.save();
     };
-    panel.onchange = (e) => { if (e.target.closest("[data-r]")) RB.nativeState(); };
+    panel.onchange = (e) => {
+      if (e.target.closest("[data-r]")) RB.nativeState();
+      const sel = e.target.closest("[data-sel]");
+      if (sel) {
+        const v = sel.value;
+        $("#dnsK").hidden = v !== "kustom";
+        setS({ [sel.dataset.sel]: v });
+        RBUi.toast(v === "bawaan" ? "DNS kembali ke bawaan." : v === "kustom" ? "Isi alamat DNS lalu tekan Pakai." : "DNS diterapkan.");
+      }
+    };
   }
 
   // dipanggil Java

@@ -97,3 +97,7 @@ label .field { margin-top: 4px; color: var(--ink); }
 .stat a { color: var(--accent); }
 .pinbox { display: grid; gap: 10px; }
 .pinhint { color: var(--accent); font-size: 13px; min-height: 18px; margin: 0; }
+/* 0.2: ikon situs favorit */
+.fav .ico.img { background: #fff; border: 1px solid var(--line); overflow: hidden; }
+.fav .ico.img img { width: 30px; height: 30px; object-fit: contain; image-rendering: auto; }
+select.field { -webkit-appearance: menulist; appearance: menulist; }
