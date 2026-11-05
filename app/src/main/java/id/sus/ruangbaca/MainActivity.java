@@ -887,6 +887,8 @@ public class MainActivity extends Activity {
         boolean light = false;
         switch (theme) {
             case "dark": barC = 0xff1b1b1f; ink = 0xffececf0; field = 0xff24242a; accent = 0xffe5604f; break;
+            case "senja": barC = 0xff261b12; ink = 0xfff3dfc4; field = 0xff32241a; accent = 0xffff9f43; break;
+            case "matcha": barC = 0xfffbfdf8; ink = 0xff1f2a1a; field = 0xffe6eedc; accent = 0xff4f7f3a; light = true; break;
             case "neon": barC = 0xff12121e; ink = 0xffe8f7ff; field = 0xff1a1a2b; accent = 0xff00e5ff; break;
             case "neonlight": barC = 0xffffffff; ink = 0xff15152b; field = 0xffeff0fd; accent = 0xffc400d6; light = true; break;
             default: barC = 0xfffffdf8; ink = 0xff1d1b17; field = 0xfff1ebdf; accent = 0xffb4372c; light = true;
@@ -906,7 +908,7 @@ public class MainActivity extends Activity {
         address.setTextColor(ink);
         address.setHintTextColor((ink & 0x00ffffff) | 0x88000000);
         progress.setProgressTintList(ColorStateList.valueOf(accent));
-        int bgC = "dark".equals(theme) ? 0xff121214 : "neon".equals(theme) ? 0xff0a0a12 : "neonlight".equals(theme) ? 0xfff6f7ff : 0xfff4efe6;
+        int bgC = "dark".equals(theme) ? 0xff121214 : "neon".equals(theme) ? 0xff0a0a12 : "senja".equals(theme) ? 0xff1c140d : "matcha".equals(theme) ? 0xffeef3e8 : "neonlight".equals(theme) ? 0xfff6f7ff : 0xfff4efe6;
         ui.setBackgroundColor(bgC);
         getWindow().setStatusBarColor(barC);
         getWindow().setNavigationBarColor(bgC);

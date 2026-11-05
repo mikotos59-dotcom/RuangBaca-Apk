@@ -165,7 +165,7 @@
     const s = S();
     openSheet("Pengaturan", `
       <h4>Tampilan</h4>
-      ${rowS("Tema aplikasi", "", seg("theme", s.theme, [["normal", "Kertas"], ["dark", "Gelap"], ["neon", "Neon gelap"], ["neonlight", "Neon putih"]]))}
+      ${rowS("Tema aplikasi", "", seg("theme", s.theme, [["normal", "Kertas"], ["dark", "Gelap"], ["senja", "Senja"], ["matcha", "Matcha"], ["neon", "Neon gelap"], ["neonlight", "Neon putih"]]))}
       ${row("Mode gelap situs", "Bawaan untuk situs baru", sw("dark", s.dark))}
       ${row("Hitam putih", "Bawaan untuk situs baru", sw("gray", s.gray))}
       ${row("Warna kertas", "", seg("paper", s.paper, [["putih", "Putih"], ["krem", "Krem"], ["abu", "Abu"]]))}

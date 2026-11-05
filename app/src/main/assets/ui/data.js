@@ -4,7 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const DEFAULTS = {
-  theme: "normal",          // normal | dark | neon | neonlight
+  theme: "normal",          // normal | dark | senja | matcha | neon | neonlight
   adblock: true,
   autoUpdate: true,         // cek versi baru di GitHub saat aplikasi dibuka (paling sering 12 jam sekali)
   search: "startpage",      // startpage | google | duckduckgo | bing

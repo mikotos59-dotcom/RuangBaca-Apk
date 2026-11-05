@@ -18,6 +18,18 @@ html[data-theme="neon"] {
   --accent2: #ff2bd6; --glow: 0 0 14px rgba(0, 229, 255, .55);
   --overlay: rgba(2, 2, 8, .7); --shadow: 0 10px 30px rgba(0, 0, 0, .6);
 }
+/* senja: cokelat hangat rendah cahaya biru, nyaman untuk baca malam */
+html[data-theme="senja"] {
+  --bg: #1c140d; --bg-deep: #150f09; --panel: #261b12; --panel-hi: #32241a; --line: #4a3626;
+  --ink: #f3dfc4; --muted: #b89a78; --accent: #ff9f43; --accent-ink: #1c0f02; --field: #22180f;
+  --overlay: rgba(14, 9, 4, .66); --shadow: 0 10px 26px rgba(0, 0, 0, .55);
+}
+/* matcha: hijau teh lembut, terang tapi tidak silau */
+html[data-theme="matcha"] {
+  --bg: #eef3e8; --bg-deep: #e3ebd9; --panel: #fbfdf8; --panel-hi: #e6eedc; --line: #c9d6bb;
+  --ink: #1f2a1a; --muted: #5b6b52; --accent: #4f7f3a; --accent-ink: #fff; --field: #fbfdf8;
+  --overlay: rgba(31, 42, 26, .4); --shadow: 0 8px 22px rgba(50, 70, 40, .16);
+}
 /* neon putih: terang bersih, cahaya ungu + merah muda */
 html[data-theme="neonlight"] {
   --bg: #f6f7ff; --bg-deep: #eceefb; --panel: #ffffff; --panel-hi: #eff0fd; --line: #d9dcf2;
@@ -131,3 +143,8 @@ html[data-theme^="neon"] .updbar { box-shadow: var(--glow); }
 .row.stack .seg { flex-wrap: nowrap; }
 .row.stack .seg button { flex: 1 1 auto; padding: 8px 2px; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .unotes .uh { color: var(--ink); } .unotes code { font-size: 12px; background: var(--panel-hi); padding: 0 4px; border-radius: 4px; }
+/* 0.2.7: enam tema = 3 kolom x 2 baris */
+.row.stack .seg[data-seg="theme"] { display: grid; grid-template-columns: repeat(3, 1fr); }
+html[data-theme="senja"] h1 { color: #ffd2a1; }
+html[data-theme="matcha"] .tb.pri, html[data-theme="matcha"] .seg button.sel { background: var(--accent); border-color: var(--accent); color: #fff; }
+html[data-theme="senja"] .tb.pri, html[data-theme="senja"] .seg button.sel { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }

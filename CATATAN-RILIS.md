@@ -7,6 +7,13 @@
 
 
 
+
+## 0.2.7
+- **Dua tema baru:**
+  - **Senja**: cokelat hangat dengan aksen oranye, sedikit cahaya biru. Nyaman untuk baca malam sebelum tidur.
+  - **Matcha**: hijau teh lembut. Terang tapi tidak silau, cocok untuk baca siang.
+- Pilihan tema sekarang 6 (Kertas, Gelap, Senja, Matcha, Neon gelap, Neon putih), tersusun 3 kolom.
+
 ## 0.2.6
 - **Pasang ulang tanpa unduh ulang:** kalau layar pemasangan Android tadi dibatalkan (mis. saat Google Play Protect menawarkan pindai), sekarang ada tombol **Pasang sekarang**. APK yang sudah diunduh langsung dipakai lagi, juga setelah aplikasi ditutup dan dibuka kembali.
 - Catatan rilis dari GitHub ditampilkan rapi (judul dan poin), bukan tanda `###` dan `-` mentah.
